@@ -1,0 +1,8 @@
+{
+	"Main": {
+		"names": ["program/Main"]
+	},
+	"SomeClass": {
+		"names": ["program/SomeClass"]
+	}
+}

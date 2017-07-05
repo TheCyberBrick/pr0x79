@@ -1,0 +1,31 @@
+{
+	"first_return": {
+		"type": "instruction",
+		"identification": "first_return"
+	},
+	"start": {
+		"type": "instruction",
+		"identification": "index",
+		"index": 0
+	},
+	"this": {
+		"type": "local_variable",
+		"identification": "index",
+		"index": 0
+	},
+	"local_var_1": {
+		"type": "local_variable",
+		"identification": "index",
+		"index": 1
+	},
+	"local_var_2": {
+		"type": "local_variable",
+		"identification": "index",
+		"index": 2
+	},
+	"local_var_3": {
+		"type": "local_variable",
+		"identification": "index",
+		"index": 3
+	}
+}

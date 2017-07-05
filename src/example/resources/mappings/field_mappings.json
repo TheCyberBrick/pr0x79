@@ -1,0 +1,10 @@
+{
+	"Main_obj": {
+		"desc": ["Lprogram/SomeClass;"],
+		"names": ["obj"]
+	},
+	"SomeClass_value": {
+		"desc": ["Ljava/lang/String;"],
+		"names": ["value"]
+	}
+}

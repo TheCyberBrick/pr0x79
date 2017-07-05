@@ -1,0 +1,10 @@
+{
+	"Main_ctor": {
+		"desc": ["()V"],
+		"names": ["<init>"]
+	},
+	"SomeClass_print": {
+		"desc": ["(Ljava/lang/String;)V"],
+		"names": ["print"]
+	}
+}
