@@ -103,14 +103,13 @@ public class BytecodeInstrumentation {
 	 * @return
 	 */
 	public boolean acceptsClass(String cls) {
-		String internalName = cls.replace('.', '/');
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			if(isIdentifiedClass(accessor.getClassIdentifier(), internalName)) {
+			if(isIdentifiedClass(accessor.getClassIdentifier(), cls)) {
 				return true;
 			}
 		}
 		for(MethodInterceptorData interceptor : this.interceptors.values()) {
-			if(isIdentifiedClass(interceptor.getClassIdentifier(), internalName)) {
+			if(isIdentifiedClass(interceptor.getClassIdentifier(), cls)) {
 				return true;
 			}
 		}

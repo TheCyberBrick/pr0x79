@@ -33,7 +33,10 @@ public class Accessors {
 	 */
 	public void registerAccessor(Class<? extends IAccessor> accessor) {
 		if(!this.bootstrapper.isInitializing()) {
-			throw new RuntimeException("Accessors must be registered during the bootstrap initialization");
+			throw new InstrumentorException(String.format("Accessor %s must be registered during the bootstrap initialization", accessor.getName()));
+		}
+		if(!this.bootstrapper.isAccessorClassValid(accessor)) {
+			throw new InstrumentorException(String.format("Accessor class %s was already loaded before the bootstrapper initialization!", accessor.getName()));
 		}
 		if(!accessor.isInterface()) {
 			throw new InstrumentorException(String.format("Accessor %s is not an interface", accessor.getName()));
