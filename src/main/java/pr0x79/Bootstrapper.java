@@ -18,14 +18,15 @@ import java.util.WeakHashMap;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 
 import pr0x79.instrumentation.BytecodeInstrumentation;
 import pr0x79.instrumentation.accessor.Accessors;
+import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.IAccessor;
 import pr0x79.instrumentation.accessor.Interceptors;
 import pr0x79.instrumentation.accessor.MethodInterceptorData;
-import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.identification.Identifiers;
 
 public class Bootstrapper {
@@ -38,9 +39,6 @@ public class Bootstrapper {
 
 	//Contains all accessor classes that were loaded through the class transformer
 	private final Map<ClassLoader, Set<String>> internallyLoadedAccessorClasses = new WeakHashMap<ClassLoader, Set<String>>();
-
-	//Contains all instrumentor classes that were loaded through the class transformer
-	private final Map<ClassLoader, Set<String>> internallyLoadedInstrumentorClasses = new WeakHashMap<ClassLoader, Set<String>>();
 
 	private Set<IInstrumentor> instrumentors;
 	private boolean initializing = true;
@@ -67,32 +65,30 @@ public class Bootstrapper {
 	}
 
 	/**
-	 * Adds the specified {@link IAccessor} or {@link IInstrumentor} to the internally loaded class list
-	 * @param map
+	 * Adds the specified {@link IAccessor} to the internally loaded class list
 	 * @param loader
 	 * @param className
 	 */
-	private void addInternallyLoadedClass(Map<ClassLoader, Set<String>> map, ClassLoader loader, String className) {
-		synchronized(map) {
-			Set<String> classes = map.get(loader);
+	private void addInternallyLoadedAccessor(ClassLoader loader, String className) {
+		synchronized(this.internallyLoadedAccessorClasses) {
+			Set<String> classes = this.internallyLoadedAccessorClasses.get(loader);
 			if (classes == null) {
-				map.put(loader, classes = new HashSet<String>());
+				this.internallyLoadedAccessorClasses.put(loader, classes = new HashSet<String>());
 			}
 			classes.add(className);
 		}
 	}
 
 	/**
-	 * Returns whether an {@link IAccessor} or {@link IInstrumentor} was loaded through the internal class transformer
-	 * @param map
+	 * Returns whether an {@link IAccessor} was loaded through the internal class transformer
 	 * @param loader
 	 * @param className
 	 * @return
 	 */
-	private boolean wasClassLoadedInternally(Map<ClassLoader, Set<String>> map, ClassLoader loader, String className) {
+	private boolean wasAccessorLoadedInternally(ClassLoader loader, String className) {
 		while(loader != null) {
-			synchronized(map) {
-				Set<String> classes = map.get(loader);
+			synchronized(this.internallyLoadedAccessorClasses) {
+				Set<String> classes = this.internallyLoadedAccessorClasses.get(loader);
 				if (classes != null && classes.contains(className)) {
 					return true;
 				}
@@ -118,12 +114,17 @@ public class Bootstrapper {
 				ClassNode clsNode = new ClassNode();
 				classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
 
-				if(clsNode.interfaces.contains(Type.getInternalName(IInstrumentor.class))) {
-					addInternallyLoadedClass(internallyLoadedInstrumentorClasses, loader, className.replace("/", "."));
+				AnnotationNode classAccessorAnnotation = null;
+				if(clsNode.visibleAnnotations != null) {
+					for(AnnotationNode annotation : clsNode.visibleAnnotations) {
+						if(annotation.desc.equals(Type.getDescriptor(ClassAccessor.class))) {
+							classAccessorAnnotation = annotation;
+							break;
+						}
+					}
 				}
-
-				if(clsNode.interfaces.contains(Type.getInternalName(IAccessor.class))) {
-					addInternallyLoadedClass(internallyLoadedAccessorClasses, loader, className.replace("/", "."));
+				if(classAccessorAnnotation != null) {
+					addInternallyLoadedAccessor(loader, className.replace("/", "."));
 
 					try {
 						if(instrumentor.instrumentAccessorClass(clsNode, Bootstrapper.this)) {
@@ -149,11 +150,6 @@ public class Bootstrapper {
 			IInstrumentor instrumentor = null;
 			try {
 				instrumentor = this.initInstrumentor(instrumentorClass);
-
-				//Makes sure that the instrumentor class was not already loaded
-				if(!this.wasClassLoadedInternally(this.internallyLoadedInstrumentorClasses, Bootstrapper.class.getClassLoader(), instrumentorClass)) {
-					bootstrapperInitExceptions.add(new InstrumentorException(String.format("Instrumentor class %s was already loaded before the bootstrapper initialization!", instrumentorClass)));
-				}
 			} catch(ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException
 					| InvocationTargetException | NoSuchMethodException | SecurityException ex) {
 				bootstrapperInitExceptions.add(ex);
@@ -289,7 +285,7 @@ public class Bootstrapper {
 	 * @return
 	 */
 	public boolean isAccessorClassValid(Class<? extends IAccessor> cls) {
-		return this.wasClassLoadedInternally(this.internallyLoadedAccessorClasses, Bootstrapper.class.getClassLoader(), cls.getName());
+		return this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), cls.getName());
 	}
 
 	/**
