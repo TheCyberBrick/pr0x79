@@ -137,10 +137,12 @@ public class BytecodeInstrumentation {
 	 */
 	public boolean instrumentAccessorClass(ClassNode clsNode, Bootstrapper bootstrapper) {
 		AnnotationNode classAccessorAnnotation = null;
-		for(AnnotationNode annotation : clsNode.visibleAnnotations) {
-			if(annotation.desc.equals(Type.getDescriptor(ClassAccessor.class))) {
-				classAccessorAnnotation = annotation;
-				break;
+		if(clsNode.visibleAnnotations != null) {
+			for(AnnotationNode annotation : clsNode.visibleAnnotations) {
+				if(annotation.desc.equals(Type.getDescriptor(ClassAccessor.class))) {
+					classAccessorAnnotation = annotation;
+					break;
+				}
 			}
 		}
 		if(classAccessorAnnotation == null) {
@@ -203,10 +205,12 @@ public class BytecodeInstrumentation {
 					AnnotationNode importAnnotation = null;
 					if(method.visibleParameterAnnotations != null && i < method.visibleParameterAnnotations.length) {
 						List<AnnotationNode> paramAnnotations = method.visibleParameterAnnotations[i];
-						for(AnnotationNode annotation : paramAnnotations) {
-							if(annotation.desc.equals(Type.getDescriptor(LocalVar.class))) {
-								importAnnotation = annotation;
-								break;
+						if(paramAnnotations != null) {
+							for(AnnotationNode annotation : paramAnnotations) {
+								if(annotation.desc.equals(Type.getDescriptor(LocalVar.class))) {
+									importAnnotation = annotation;
+									break;
+								}
 							}
 						}
 					}
