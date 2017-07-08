@@ -103,7 +103,7 @@ public class ClassAccessorData {
 				}
 			}
 
-			if(fieldAccessor == null && methodAccessor == null && fieldGenerator == null && !method.isDefault() && !instrumentor.isGeneratedMethod(method)) {
+			if(fieldAccessor == null && methodAccessor == null && fieldGenerator == null && !method.isDefault() && !Modifier.isStatic(method.getModifiers()) && !instrumentor.isGeneratedMethod(method)) {
 				throw new InstrumentorException(String.format("Class accessor %s has an abstract method: %s", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method)));
 			}
 		}
