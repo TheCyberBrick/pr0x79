@@ -151,7 +151,7 @@ public class Bootstrapper {
 				instrumentor = this.initInstrumentor(instrumentorClass);
 
 				//Makes sure that the instrumentor class was not already loaded
-				if(!this.wasClassLoadedInternally(this.internallyLoadedInstrumentorClasses, Thread.currentThread().getContextClassLoader(), instrumentorClass)) {
+				if(!this.wasClassLoadedInternally(this.internallyLoadedInstrumentorClasses, Bootstrapper.class.getClassLoader(), instrumentorClass)) {
 					bootstrapperInitExceptions.add(new InstrumentorException(String.format("Instrumentor class %s was already loaded before the bootstrapper initialization!", instrumentorClass)));
 				}
 			} catch(ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException
@@ -289,7 +289,7 @@ public class Bootstrapper {
 	 * @return
 	 */
 	public boolean isAccessorClassValid(Class<? extends IAccessor> cls) {
-		return this.wasClassLoadedInternally(this.internallyLoadedAccessorClasses, Thread.currentThread().getContextClassLoader(), cls.getName());
+		return this.wasClassLoadedInternally(this.internallyLoadedAccessorClasses, Bootstrapper.class.getClassLoader(), cls.getName());
 	}
 
 	/**
