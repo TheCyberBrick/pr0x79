@@ -245,12 +245,14 @@ public class BytecodeInstrumentation {
 								node.getOpcode() == Opcodes.LRETURN ||
 								node.getOpcode() == Opcodes.ATHROW) {
 							InsnList insertions = new InsnList();
+							int stackIndex = 1;
 							for(int i = 0; i < params.length; i++) {
 								LocalVarData localVar = methodLocalVars.get(i);
 								Type varType = Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()];
 								insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
-								insertions.add(new VarInsnNode(varType.getOpcode(Opcodes.ILOAD), 1 + i));
+								insertions.add(new VarInsnNode(varType.getOpcode(Opcodes.ILOAD), stackIndex));
 								insertions.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, clsNode.name, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, varType), true));
+								stackIndex += varType.getSize();
 							}
 							insertionPoints.put(node, insertions);
 						}
@@ -524,34 +526,36 @@ public class BytecodeInstrumentation {
 	 */
 	private void instrumentMethodCaller(MethodVisitor mv, ClassNode clsNode, MethodNode targetMethod, Method accessorMethod, boolean isInterfaceMethod) {
 		mv.visitVarInsn(Opcodes.ALOAD, 0);
-		int paramIndex = 1;
+		int stackIndex = 1;
+		int paramIndex = 0;
 		Type[] targetMethodParams = Type.getArgumentTypes(targetMethod.desc);
 		for(Class<?> param : accessorMethod.getParameterTypes()) {
 			if(param.isPrimitive()) {
 				if(param == int.class) {
-					mv.visitVarInsn(Opcodes.ILOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.ILOAD, stackIndex);
 				} else if(param == boolean.class) {
-					mv.visitVarInsn(Opcodes.ILOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.ILOAD, stackIndex);
 				} else if(param == byte.class) {
-					mv.visitVarInsn(Opcodes.ILOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.ILOAD, stackIndex);
 				} else if(param == char.class) {
-					mv.visitVarInsn(Opcodes.ILOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.ILOAD, stackIndex);
 				} else if(param == double.class) {
-					mv.visitVarInsn(Opcodes.DLOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.DLOAD, stackIndex);
 				} else if(param == float.class) {
-					mv.visitVarInsn(Opcodes.FLOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.FLOAD, stackIndex);
 				} else if(param == long.class) {
-					mv.visitVarInsn(Opcodes.LLOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.LLOAD, stackIndex);
 				} else if(param == short.class) {
-					mv.visitVarInsn(Opcodes.ILOAD, paramIndex);
+					mv.visitVarInsn(Opcodes.ILOAD, stackIndex);
 				}
 			} else {
-				mv.visitVarInsn(Opcodes.ALOAD, paramIndex);
+				mv.visitVarInsn(Opcodes.ALOAD, stackIndex);
 			}
-			if(targetMethodParams[paramIndex - 1].getSort() == Type.OBJECT) {
+			if(targetMethodParams[paramIndex].getSort() == Type.OBJECT) {
 				//This makes sure that if an accessor is used as parameter it is cast properly
-				mv.visitTypeInsn(Opcodes.CHECKCAST, targetMethodParams[paramIndex - 1].getInternalName());
+				mv.visitTypeInsn(Opcodes.CHECKCAST, targetMethodParams[paramIndex].getInternalName());
 			}
+			stackIndex += targetMethodParams[paramIndex].getSize();
 			paramIndex++;
 		}
 		mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, clsNode.name, targetMethod.name, targetMethod.desc, isInterfaceMethod);
@@ -771,12 +775,7 @@ public class BytecodeInstrumentation {
 				int importLocalVariableIndex = importData.getInstructionIdentifier().identify(targetMethod);
 				LocalVariableNode importLocalVariable = null;
 				if(importLocalVariableIndex >= 0 && importLocalVariableIndex < targetMethod.localVariables.size()) {
-					for(LocalVariableNode localVarNode : targetMethod.localVariables) {
-						if(localVarNode.index == importLocalVariableIndex) {
-							importLocalVariable = localVarNode;
-							break;
-						}
-					}
+					importLocalVariable = targetMethod.localVariables.get(importLocalVariableIndex);
 				}
 				if(importLocalVariable == null) {
 					throw new ImportInstructionNotFoundException(importData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getInstructionIdentifierId(), importData.getInstructionIdentifier());
@@ -812,12 +811,7 @@ public class BytecodeInstrumentation {
 					int importLocalVariableIndex = importData.getInstructionIdentifier().identify(targetMethod);
 					LocalVariableNode importLocalVariable = null;
 					if(importLocalVariableIndex >= 0 && importLocalVariableIndex < targetMethod.localVariables.size()) {
-						for(LocalVariableNode localVarNode : targetMethod.localVariables) {
-							if(localVarNode.index == importLocalVariableIndex) {
-								importLocalVariable = localVarNode;
-								break;
-							}
-						}
+						importLocalVariable = targetMethod.localVariables.get(importLocalVariableIndex);
 					}
 					if(importLocalVariable == null) {
 						throw new ImportInstructionNotFoundException(importData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getInstructionIdentifierId(), importData.getInstructionIdentifier());
