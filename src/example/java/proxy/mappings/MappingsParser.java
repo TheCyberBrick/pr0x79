@@ -15,6 +15,7 @@ import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.Identifiers;
 import proxy.identifiers.IndexInstructionIdentifier;
 import proxy.identifiers.IndexLocalVariableIdentifier;
+import proxy.identifiers.MethodCallInstructionIdentifier;
 import proxy.identifiers.ReturnInstructionIdentifier;
 import proxy.identifiers.StringClassIdentifier;
 import proxy.identifiers.StringFieldIdentifier;
@@ -119,6 +120,29 @@ public class MappingsParser {
 						offset = entryJson.get("offset").getAsInt();
 					}
 					identifiers.registerInstructionIdentifier(entry.getKey(), new ReturnInstructionIdentifier(offset, true));
+					break;
+				}
+				case "method_call": {
+					boolean before = true;
+					if(entryJson.has("before")) {
+						before = entryJson.get("before").getAsBoolean();
+					}
+					JsonArray desc = entryJson.get("desc").getAsJsonArray();
+					List<String> mappedDescs = new ArrayList<>(desc.size());
+					for(JsonElement e : desc) {
+						mappedDescs.add(e.getAsString());
+					}
+					JsonArray values = entryJson.get("names").getAsJsonArray();
+					List<String> mappedNames = new ArrayList<>(values.size());
+					for(JsonElement e : values) {
+						mappedNames.add(e.getAsString());
+					}
+					JsonArray owners = entryJson.get("owners").getAsJsonArray();
+					List<String> mappedOwners = new ArrayList<>(owners.size());
+					for(JsonElement e : owners) {
+						mappedOwners.add(e.getAsString());
+					}
+					identifiers.registerInstructionIdentifier(entry.getKey(), new MethodCallInstructionIdentifier(mappedOwners, mappedNames, mappedDescs, before));
 					break;
 				}
 				default:

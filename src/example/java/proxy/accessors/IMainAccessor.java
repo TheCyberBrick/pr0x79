@@ -40,6 +40,22 @@ public interface IMainAccessor extends IAccessor {
 	}
 
 	/*
+	 * These two methods intercept before and after the SomeClass#print call in Main#init
+	 */
+	@Interceptor(methodIdentifierId = "Main_init", instructionIdentifierId = "before_init_print")
+	public default void interceptInitBeforePrint() {
+		System.out.println("--------Interception--------");
+		System.out.println("Main#init before SomeClass#print call intercepted!");
+		System.out.println("-----------------------------");
+	}
+	@Interceptor(methodIdentifierId = "Main_init", instructionIdentifierId = "after_init_print")
+	public default void interceptInitAfterPrint() {
+		System.out.println("\n--------Interception--------");
+		System.out.println("Main#init after SomeClass#print call intercepted!");
+		System.out.println("-----------------------------");
+	}
+
+	/*
 	 * This method returns the value of the field Main#obj.
 	 * Since we have an accessor for SomeClass called ISomeClassAccessor,
 	 * we can use ISomeClassAccessor as return type.

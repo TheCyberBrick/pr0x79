@@ -8,6 +8,21 @@
 		"identification": "index",
 		"index": 0
 	},
+	"before_init_print": {
+		"type": "instruction",
+		"identification": "method_call",
+		"desc": ["(Ljava/lang/String;)V"],
+		"names": ["print"],
+		"owners": ["program/SomeClass"]
+	},
+	"after_init_print": {
+		"type": "instruction",
+		"identification": "method_call",
+		"desc": ["(Ljava/lang/String;)V"],
+		"names": ["print"],
+		"owners": ["program/SomeClass"],
+		"before": false
+	},
 	"this": {
 		"type": "local_variable",
 		"identification": "index",
@@ -22,6 +37,11 @@
 		"type": "local_variable",
 		"identification": "index",
 		"index": 2
+	},
+	"local_var_3": {
+		"type": "local_variable",
+		"identification": "index",
+		"index": 3
 	},
 	"local_var_3": {
 		"type": "local_variable",

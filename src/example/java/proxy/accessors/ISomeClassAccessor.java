@@ -22,7 +22,7 @@ public interface ISomeClassAccessor extends IAccessor {
 	 * sets the "input" parameter value to "intercepted input!"
 	 */
 	@Interceptor(methodIdentifierId = "SomeClass_print", instructionIdentifierId = "start")
-	public default void ctor(@LocalVar(instructionIdentifierId = "local_var_1") String input) {
+	public default void interceptPrint(@LocalVar(instructionIdentifierId = "local_var_1") String input) {
 		System.out.println("\n--------Interception--------");
 		System.out.println("SomeClass#print(String) intercepted!");
 		System.out.println("Parameter \"input\" is: " + input);
