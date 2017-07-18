@@ -154,8 +154,12 @@ public class MappingsParser {
 				String identificationMethod = entryJson.get("identification").getAsString().toLowerCase();
 				switch(identificationMethod) {
 				case "string":
-					String name = entryJson.get("name").getAsString();
-					identifiers.registerInstructionIdentifier(entry.getKey(), new StringLocalVariableIdentifier(name));
+					JsonArray values = entryJson.get("names").getAsJsonArray();
+					List<String> mappedNames = new ArrayList<>(values.size());
+					for(JsonElement e : values) {
+						mappedNames.add(e.getAsString());
+					}
+					identifiers.registerInstructionIdentifier(entry.getKey(), new StringLocalVariableIdentifier(mappedNames));
 					break;
 				case "index":
 					boolean reversed = false;
