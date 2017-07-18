@@ -921,11 +921,7 @@ public class BytecodeInstrumentation {
 	 */
 	private boolean isTypeEqualOrAccessor(Type type, Class<?> cls) {
 		if(cls != null && type.getSort() == Type.OBJECT && IAccessor.class.isAssignableFrom(cls)) {
-			ClassAccessor classAccessor = cls.getAnnotation(ClassAccessor.class);
-			if(classAccessor == null) {
-				return false;
-			}
-			ClassAccessorData accessorInstance = this.accessors.getAccessorById(classAccessor.classIdentifierId());
+			ClassAccessorData accessorInstance = this.accessors.getAccessorByClassName(cls.getName());
 			if(accessorInstance == null) {
 				return false;
 			}

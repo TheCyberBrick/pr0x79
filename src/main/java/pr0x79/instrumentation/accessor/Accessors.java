@@ -1,8 +1,10 @@
 package pr0x79.instrumentation.accessor;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import pr0x79.Bootstrapper;
@@ -18,7 +20,7 @@ public class Accessors {
 	private final Bootstrapper bootstrapper;
 	private final Identifiers identifiers;
 	private final BytecodeInstrumentation instrumentor;
-	private final Map<String, ClassAccessorData> accessorsById = new HashMap<>();
+	private final Map<String, List<ClassAccessorData>> accessorsById = new HashMap<>();
 	private final Map<String, ClassAccessorData> accessorsByClassName = new HashMap<>();
 
 	public Accessors(Bootstrapper bootstrapper, Identifiers identifiers, BytecodeInstrumentation instrumentor) {
@@ -50,17 +52,12 @@ public class Accessors {
 			throw new InstrumentorException(String.format("Class identifier %s:%s is not registered", accessor.getName(), clsAccessor.classIdentifierId()));
 		}
 		ClassAccessorData accessorData = new ClassAccessorData(clsAccessor.classIdentifierId(), this.identifiers, accessor, clsIdentifier, this.instrumentor);
-		this.accessorsById.put(clsAccessor.classIdentifierId(), accessorData);
+		List<ClassAccessorData> accessors = this.accessorsById.get(clsAccessor.classIdentifierId());
+		if(accessors == null) {
+			this.accessorsById.put(clsAccessor.classIdentifierId(), accessors = new ArrayList<>());
+		}
+		accessors.add(accessorData);
 		this.accessorsByClassName.put(accessor.getName(), accessorData);
-	}
-
-	/**
-	 * Gets an accessor by ID (classIdentifierId)
-	 * @param id
-	 * @return
-	 */
-	public ClassAccessorData getAccessorById(String id) {
-		return this.accessorsById.get(id);
 	}
 
 	/**
@@ -73,10 +70,19 @@ public class Accessors {
 	}
 
 	/**
+	 * Gets a list of accessors with the specified id, can be null if no accessors are found
+	 * @param name
+	 * @return
+	 */
+	public List<ClassAccessorData> getAccessorsById(String name) {
+		return this.accessorsById.get(name);
+	}
+
+	/**
 	 * Returns all class accessors
 	 * @return
 	 */
 	public Collection<ClassAccessorData> getClassAccessors() {
-		return Collections.unmodifiableCollection(this.accessorsById.values());
+		return Collections.unmodifiableCollection(this.accessorsByClassName.values());
 	}
 }
