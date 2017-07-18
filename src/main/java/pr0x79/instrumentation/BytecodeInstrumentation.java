@@ -774,8 +774,10 @@ public class BytecodeInstrumentation {
 			for(LocalVarData importData : interceptor.getLocalVars()) {
 				int importLocalVariableIndex = importData.getInstructionIdentifier().identify(targetMethod);
 				LocalVariableNode importLocalVariable = null;
-				if(importLocalVariableIndex >= 0 && importLocalVariableIndex < targetMethod.localVariables.size()) {
-					importLocalVariable = targetMethod.localVariables.get(importLocalVariableIndex);
+				for(LocalVariableNode localVar : targetMethod.localVariables) {
+					if(localVar.index == importLocalVariableIndex) {
+						importLocalVariable = localVar;
+					}
 				}
 				if(importLocalVariable == null) {
 					throw new ImportInstructionNotFoundException(importData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getInstructionIdentifierId(), importData.getInstructionIdentifier());
@@ -810,8 +812,10 @@ public class BytecodeInstrumentation {
 				for(LocalVarData importData : interceptor.getLocalVars()) {
 					int importLocalVariableIndex = importData.getInstructionIdentifier().identify(targetMethod);
 					LocalVariableNode importLocalVariable = null;
-					if(importLocalVariableIndex >= 0 && importLocalVariableIndex < targetMethod.localVariables.size()) {
-						importLocalVariable = targetMethod.localVariables.get(importLocalVariableIndex);
+					for(LocalVariableNode localVar : targetMethod.localVariables) {
+						if(localVar.index == importLocalVariableIndex) {
+							importLocalVariable = localVar;
+						}
 					}
 					if(importLocalVariable == null) {
 						throw new ImportInstructionNotFoundException(importData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getInstructionIdentifierId(), importData.getInstructionIdentifier());

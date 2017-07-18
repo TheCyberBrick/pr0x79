@@ -1,15 +1,17 @@
 package proxy.identifiers;
 
+import java.util.List;
+
 import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import pr0x79.instrumentation.identification.IInstructionIdentifier;
 
 public class StringLocalVariableIdentifier implements IInstructionIdentifier {
-	private final String name;
+	private final String[] names;
 
-	public StringLocalVariableIdentifier(String name) {
-		this.name = name;
+	public StringLocalVariableIdentifier(List<String> names) {
+		this.names = names.toArray(new String[0]);
 	}
 
 	@Override
@@ -19,10 +21,11 @@ public class StringLocalVariableIdentifier implements IInstructionIdentifier {
 
 	@Override
 	public int identify(MethodNode method) {
-		for(int i = 0; i < method.localVariables.size(); i++) {
-			LocalVariableNode localVariable = method.localVariables.get(i);
-			if(localVariable.name.equals(this.name)) {
-				return i;
+		for(LocalVariableNode localVariable : method.localVariables) {
+			for(String name : this.names) {
+				if(name.equals(localVariable.name)) {
+					return localVariable.index;
+				}
 			}
 		}
 		return -1;
