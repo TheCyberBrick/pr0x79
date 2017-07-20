@@ -110,6 +110,8 @@ public class Bootstrapper {
 		inst.addTransformer(new ClassFileTransformer() {
 			@Override
 			public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDoman, byte[] bytes) throws IllegalClassFormatException {
+				boolean modified = false;
+
 				ClassReader classReader = new ClassReader(bytes);
 				ClassNode clsNode = new ClassNode();
 				classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
@@ -123,14 +125,13 @@ public class Bootstrapper {
 						}
 					}
 				}
+
 				if(classAccessorAnnotation != null) {
 					addInternallyLoadedAccessor(loader, className.replace("/", "."));
 
 					try {
 						if(instrumentor.instrumentAccessorClass(clsNode, Bootstrapper.this)) {
-							ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-							clsNode.accept(classWriter);
-							return classWriter.toByteArray();
+							modified = true;
 						}
 					} catch(Exception ex) {
 						if(!isInitializing()) {
@@ -139,6 +140,17 @@ public class Bootstrapper {
 							bootstrapperInitExceptions.add(ex);
 						}
 					}
+				}
+
+				if(className != null && instrumentor.acceptsClass(className)) {
+					instrumentor.instrumentClass(clsNode);
+					modified = true;
+				}
+
+				if(modified) {
+					ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+					clsNode.accept(classWriter);
+					return classWriter.toByteArray();
 				}
 
 				return bytes;
@@ -187,28 +199,6 @@ public class Bootstrapper {
 				this.onBootstrapperException(ex);
 			}
 		}
-
-		inst.addTransformer(new ClassFileTransformer() {
-			@Override
-			public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDoman, byte[] bytes) throws IllegalClassFormatException {
-				try {
-					if(className != null && instrumentor.acceptsClass(className)) {
-						ClassReader classReader = new ClassReader(bytes);
-						ClassNode clsNode = new ClassNode();
-						classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
-
-						instrumentor.instrumentClass(clsNode);
-
-						ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-						clsNode.accept(classWriter);
-						return classWriter.toByteArray();
-					}
-				} catch(Exception ex) {
-					onBootstrapperException(ex);
-				}
-				return bytes;
-			}
-		});
 
 		for(IInstrumentor instrumentor : this.instrumentors) {
 			try {

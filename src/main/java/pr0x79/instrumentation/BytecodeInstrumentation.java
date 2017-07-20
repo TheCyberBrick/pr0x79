@@ -104,12 +104,12 @@ public class BytecodeInstrumentation {
 	 */
 	public boolean acceptsClass(String cls) {
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			if(isIdentifiedClass(accessor.getClassIdentifier(), cls)) {
+			if(accessor.getClassIdentifier() != null && isIdentifiedClass(accessor.getClassIdentifier(), cls)) {
 				return true;
 			}
 		}
 		for(MethodInterceptorData interceptor : this.interceptors.values()) {
-			if(isIdentifiedClass(interceptor.getClassIdentifier(), cls)) {
+			if(interceptor.getClassIdentifier() != null && isIdentifiedClass(interceptor.getClassIdentifier(), cls)) {
 				return true;
 			}
 		}
