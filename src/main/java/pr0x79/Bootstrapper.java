@@ -17,8 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 
 import pr0x79.instrumentation.BytecodeInstrumentation;
@@ -112,47 +110,41 @@ public class Bootstrapper {
 		inst.addTransformer(new ClassFileTransformer() {
 			@Override
 			public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDoman, byte[] bytes) throws IllegalClassFormatException {
-				boolean modified = false;
+				try {
+					boolean modified = false;
 
-				ClassReader classReader = new ClassReader(bytes);
-				ClassNode clsNode = new ClassNode();
-				classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
+					ClassReader classReader = new ClassReader(bytes);
+					ClassNode clsNode = new ClassNode();
+					classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
 
-				AnnotationNode classAccessorAnnotation = null;
-				if(clsNode.visibleAnnotations != null) {
-					for(AnnotationNode annotation : clsNode.visibleAnnotations) {
-						if(annotation.desc.equals(Type.getDescriptor(ClassAccessor.class))) {
-							classAccessorAnnotation = annotation;
-							break;
-						}
-					}
-				}
+					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, ClassAccessor.CLASS_IDENTIFIER, String.class, null);
 
-				if(classAccessorAnnotation != null) {
-					addInternallyLoadedAccessor(loader, className.replace("/", "."));
+					if(classIdentifier != null) {
+						addInternallyLoadedAccessor(loader, className.replace("/", "."));
 
-					try {
 						if(instrumentor.instrumentAccessorClass(clsNode, Bootstrapper.this)) {
 							modified = true;
 						}
-					} catch(Exception ex) {
-						if(!isInitializing()) {
-							onBootstrapperException(ex);
-						} else {
+					}
+
+					if(className != null && instrumentor.acceptsClass(className)) {
+						instrumentor.instrumentClass(clsNode);
+						modified = true;
+					}
+
+					if(modified) {
+						ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+						clsNode.accept(classWriter);
+						return classWriter.toByteArray();
+					}
+				} catch(Exception ex) {
+					if(!isInitializing()) {
+						onBootstrapperException(ex);
+					} else {
+						synchronized(bootstrapperInitExceptions) {
 							bootstrapperInitExceptions.add(ex);
 						}
 					}
-				}
-
-				if(className != null && instrumentor.acceptsClass(className)) {
-					instrumentor.instrumentClass(clsNode);
-					modified = true;
-				}
-
-				if(modified) {
-					ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-					clsNode.accept(classWriter);
-					return classWriter.toByteArray();
 				}
 
 				return bytes;
