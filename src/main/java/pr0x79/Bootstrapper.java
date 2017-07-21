@@ -7,13 +7,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -24,9 +24,11 @@ import org.objectweb.asm.tree.ClassNode;
 import pr0x79.instrumentation.BytecodeInstrumentation;
 import pr0x79.instrumentation.accessor.Accessors;
 import pr0x79.instrumentation.accessor.ClassAccessor;
+import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
 import pr0x79.instrumentation.accessor.Interceptors;
 import pr0x79.instrumentation.accessor.MethodInterceptorData;
+import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.identification.Identifiers;
 
 public class Bootstrapper {
@@ -45,7 +47,7 @@ public class Bootstrapper {
 
 	private Bootstrapper() {
 		this.identifiers = new Identifiers(this);
-		Map<String, MethodInterceptorData> interceptorMap = new HashMap<>();
+		Map<String, MethodInterceptorData> interceptorMap = new ConcurrentHashMap<>();
 		this.instrumentor = new BytecodeInstrumentation(this.identifiers, interceptorMap);
 		this.interceptors = new Interceptors(interceptorMap);
 		this.accessors = new Accessors(this, this.identifiers, this.instrumentor);
@@ -182,6 +184,18 @@ public class Bootstrapper {
 			}
 		}
 
+		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
+			try {
+				@SuppressWarnings("unchecked")
+				Class<IAccessor> accessorCls = (Class<IAccessor>) Bootstrapper.class.getClassLoader().loadClass(accessor.getAccessorClass());
+				if(!this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), accessorCls.getName())) {
+					throw new InstrumentorException(String.format("Accessor class %s was already loaded before the bootstrapper initialization!", accessorCls.getName()));
+				}
+			} catch (ClassNotFoundException e) {
+				bootstrapperInitExceptions.add(e);
+			}
+		}
+
 		for(MethodInterceptorData interceptor : this.interceptors.getMethodInterceptors()) {
 			try {
 				interceptor.initIdentifiers(identifiers);
@@ -266,16 +280,6 @@ public class Bootstrapper {
 	 */
 	public synchronized boolean isInitializing() {
 		return this.initializing;
-	}
-
-	/**
-	 * Returns whether the specified accessor class was correctly loaded
-	 * through the internal class transformer
-	 * @param cls
-	 * @return
-	 */
-	public boolean isAccessorClassValid(Class<? extends IAccessor> cls) {
-		return this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), cls.getName());
 	}
 
 	/**

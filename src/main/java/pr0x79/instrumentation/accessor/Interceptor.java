@@ -18,20 +18,20 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface Interceptor {
-	public static final String METHOD_IDENTIFIER_ID = "methodIdentifierId";
-	public static final String INSTRUCTION_IDENTIFIER_ID = "instructionIdentifierId";
+	public static final String METHOD_IDENTIFIER = "methodIdentifier";
+	public static final String INSTRUCTION_IDENTIFIER = "instructionIdentifier";
 
 	/**
 	 * The ID of the method identifier that is responsible
 	 * for identifying the method
 	 * @return
 	 */
-	public String methodIdentifierId();
+	public String methodIdentifier();
 
 	/**
 	 * The ID of the instruction identifier that is responsible
 	 * for identifying the instruction where the interceptor is injected
 	 * @return
 	 */
-	public String instructionIdentifierId();
+	public String instructionIdentifier();
 }

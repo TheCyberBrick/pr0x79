@@ -1,11 +1,16 @@
 package pr0x79.instrumentation.accessor;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
 
 import pr0x79.Bootstrapper;
 import pr0x79.instrumentation.BytecodeInstrumentation;
@@ -20,8 +25,8 @@ public class Accessors {
 	private final Bootstrapper bootstrapper;
 	private final Identifiers identifiers;
 	private final BytecodeInstrumentation instrumentor;
-	private final Map<String, List<ClassAccessorData>> accessorsById = new HashMap<>();
-	private final Map<String, ClassAccessorData> accessorsByClassName = new HashMap<>();
+	private final Map<String, List<ClassAccessorData>> accessorsById = new ConcurrentHashMap<>();
+	private final Map<String, ClassAccessorData> accessorsByClassName = new ConcurrentHashMap<>();
 
 	public Accessors(Bootstrapper bootstrapper, Identifiers identifiers, BytecodeInstrumentation instrumentor) {
 		this.bootstrapper = bootstrapper;
@@ -30,34 +35,48 @@ public class Accessors {
 	}
 
 	/**
-	 * Registers an accessor
-	 * @param accessor
+	 * Registers an accessor. The accessor class must not be loaded before or during
+	 * the Bootstrapper initialization
+	 * @param className
 	 */
-	public void registerAccessor(Class<? extends IAccessor> accessor) {
+	public void registerAccessor(String className) {
 		if(!this.bootstrapper.isInitializing()) {
-			throw new InstrumentorException(String.format("Accessor %s must be registered during the bootstrap initialization", accessor.getName()));
+			throw new InstrumentorException(String.format("Accessor %s must be registered during the bootstrap initialization", className));
 		}
-		if(!this.bootstrapper.isAccessorClassValid(accessor)) {
-			throw new InstrumentorException(String.format("Accessor class %s was already loaded before the bootstrapper initialization!", accessor.getName()));
+
+		ClassNode clsNode = null;
+		try {
+			ClassReader clsReader = new ClassReader(className);
+			clsNode = new ClassNode();
+			clsReader.accept(clsNode, ClassReader.SKIP_FRAMES);
+		} catch (IOException e) {
+			throw new InstrumentorException(String.format("Could not load accessor class %s", className));
 		}
-		if(!accessor.isInterface()) {
-			throw new InstrumentorException(String.format("Accessor %s is not an interface", accessor.getName()));
+
+		if((clsNode.access & Opcodes.ACC_INTERFACE) == 0) {
+			throw new InstrumentorException(String.format("Accessor %s is not an interface", className));
 		}
-		ClassAccessor clsAccessor = accessor.getAnnotation(ClassAccessor.class);
-		if(clsAccessor == null) {
-			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor", accessor.getName()));
+
+		String classIdentifierId = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, ClassAccessor.CLASS_IDENTIFIER, String.class, null);
+		if(classIdentifierId == null) {
+			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor", className));
 		}
-		IClassIdentifier clsIdentifier = this.identifiers.getClassIdentifier(clsAccessor.classIdentifierId());
+
+		IClassIdentifier clsIdentifier = null;
+		if(classIdentifierId != null) {
+			clsIdentifier = this.identifiers.getClassIdentifier(classIdentifierId);
+		}
 		if(clsIdentifier == null) {
-			throw new InstrumentorException(String.format("Class identifier %s:%s is not registered", accessor.getName(), clsAccessor.classIdentifierId()));
+			throw new InstrumentorException(String.format("Class identifier %s:%s is not registered", className, classIdentifierId));
 		}
-		ClassAccessorData accessorData = new ClassAccessorData(clsAccessor.classIdentifierId(), this.identifiers, accessor, clsIdentifier, this.instrumentor);
-		List<ClassAccessorData> accessors = this.accessorsById.get(clsAccessor.classIdentifierId());
+
+		ClassAccessorData accessorData = new ClassAccessorData(classIdentifierId, this.identifiers, className, clsNode, clsIdentifier, this.instrumentor);
+		List<ClassAccessorData> accessors = this.accessorsById.get(classIdentifierId);
 		if(accessors == null) {
-			this.accessorsById.put(clsAccessor.classIdentifierId(), accessors = new ArrayList<>());
+			this.accessorsById.put(classIdentifierId, accessors = new ArrayList<>());
 		}
 		accessors.add(accessorData);
-		this.accessorsByClassName.put(accessor.getName(), accessorData);
+		this.accessorsByClassName.put(className, accessorData);
 	}
 
 	/**

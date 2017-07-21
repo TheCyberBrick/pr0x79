@@ -15,12 +15,12 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 @Target(PARAMETER)
 public @interface LocalVar {
-	public static final String INSTRUCTION_IDENTIFIER_ID = "instructionIdentifierId";
+	public static final String INSTRUCTION_IDENTIFIER = "instructionIdentifier";
 
 	/**
 	 * The ID of the local variable instruction identifier that is responsible
 	 * for identifying the local variable to be imported
 	 * @return
 	 */
-	public String instructionIdentifierId();
+	public String instructionIdentifier();
 }

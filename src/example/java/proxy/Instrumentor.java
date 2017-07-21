@@ -8,8 +8,6 @@ import com.google.gson.stream.JsonReader;
 
 import pr0x79.Bootstrapper;
 import pr0x79.IInstrumentor;
-import proxy.accessors.IMainAccessor;
-import proxy.accessors.ISomeClassAccessor;
 import proxy.mappings.MappingsParser;
 
 public class Instrumentor implements IInstrumentor {
@@ -41,10 +39,10 @@ public class Instrumentor implements IInstrumentor {
 
 		System.out.println("Registering accessors\n");
 
-		//The accessor interfaces are registered here. Their classes must _not_ be loaded before initBootstrapper
-
-		bootstrapper.getAccessors().registerAccessor(IMainAccessor.class);
-		bootstrapper.getAccessors().registerAccessor(ISomeClassAccessor.class);
+		//The accessor interfaces are registered here. Their classes must _not_ be loaded before or during initBootstrapper
+		
+		bootstrapper.getAccessors().registerAccessor("proxy.accessors.IMainAccessor");
+		bootstrapper.getAccessors().registerAccessor("proxy.accessors.ISomeClassAccessor");
 	}
 
 	@Override

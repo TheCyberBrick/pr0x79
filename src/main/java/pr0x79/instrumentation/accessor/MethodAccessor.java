@@ -23,12 +23,15 @@ import pr0x79.instrumentation.identification.IMethodIdentifier;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface MethodAccessor {
+	public static final String METHOD_IDENTIFIER = "methodIdentifier";
+	public static final String IS_INTERFACE_METHOD = "isInterfaceMethod";
+
 	/**
 	 * The ID of the method identifier that is responsible
 	 * for identifying the method
 	 * @return
 	 */
-	public String methodIdentifierId();
+	public String methodIdentifier();
 
 	/**
 	 * Whether the method to be proxied is from an interface

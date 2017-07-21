@@ -2,8 +2,8 @@ package pr0x79.instrumentation.identification;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import pr0x79.Bootstrapper;
 
@@ -12,10 +12,10 @@ import pr0x79.Bootstrapper;
  */
 public class Identifiers {
 	private final Bootstrapper bootstrapper;
-	private final Map<String, IClassIdentifier> classIdentifiers = new HashMap<>();
-	private final Map<String, IFieldIdentifier> fieldIdentifiers = new HashMap<>();
-	private final Map<String, IMethodIdentifier> methodIdentifiers = new HashMap<>();
-	private final Map<String, IInstructionIdentifier> instructionIdentifiers = new HashMap<>();
+	private final Map<String, IClassIdentifier> classIdentifiers = new ConcurrentHashMap<>();
+	private final Map<String, IFieldIdentifier> fieldIdentifiers = new ConcurrentHashMap<>();
+	private final Map<String, IMethodIdentifier> methodIdentifiers = new ConcurrentHashMap<>();
+	private final Map<String, IInstructionIdentifier> instructionIdentifiers = new ConcurrentHashMap<>();
 
 	public Identifiers(Bootstrapper bootstrapper) {
 		this.bootstrapper = bootstrapper;

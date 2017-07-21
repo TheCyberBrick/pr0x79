@@ -5,13 +5,13 @@ import pr0x79.instrumentation.accessor.FieldAccessor;
 import pr0x79.instrumentation.accessor.IAccessor;
 import pr0x79.instrumentation.accessor.Interceptor;
 
-@ClassAccessor(classIdentifierId = "Main")
+@ClassAccessor(classIdentifier = "Main")
 public interface IMainAccessor extends IAccessor {
 
 	/*
 	 * This method intercepts Main's constructor at the first return instruction (or at the end of the method, if not return is used)
 	 */
-	@Interceptor(methodIdentifierId = "Main_ctor", instructionIdentifierId = "first_return")
+	@Interceptor(methodIdentifier = "Main_ctor", instructionIdentifier = "first_return")
 	public default void ctor() {
 		System.out.println("\n--------Interception--------");
 		System.out.println("Main constructor intercepted!");
@@ -42,13 +42,13 @@ public interface IMainAccessor extends IAccessor {
 	/*
 	 * These two methods intercept before and after the SomeClass#print call in Main#init
 	 */
-	@Interceptor(methodIdentifierId = "Main_init", instructionIdentifierId = "before_init_print")
+	@Interceptor(methodIdentifier = "Main_init", instructionIdentifier = "before_init_print")
 	public default void interceptInitBeforePrint() {
 		System.out.println("--------Interception--------");
 		System.out.println("Main#init before SomeClass#print call intercepted!");
 		System.out.println("-----------------------------");
 	}
-	@Interceptor(methodIdentifierId = "Main_init", instructionIdentifierId = "after_init_print")
+	@Interceptor(methodIdentifier = "Main_init", instructionIdentifier = "after_init_print")
 	public default void interceptInitAfterPrint() {
 		System.out.println("\n--------Interception--------");
 		System.out.println("Main#init after SomeClass#print call intercepted!");
@@ -61,7 +61,6 @@ public interface IMainAccessor extends IAccessor {
 	 * we can use ISomeClassAccessor as return type.
 	 * Simply using SomeClass as return type would also work
 	 */
-	@FieldAccessor(fieldIdentifierId = "Main_obj")
+	@FieldAccessor(fieldIdentifier = "Main_obj")
 	public ISomeClassAccessor getSomeClassObject();
-
 }

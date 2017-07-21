@@ -12,10 +12,12 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 @Target(TYPE)
 public @interface ClassAccessor {
+	public static final String CLASS_IDENTIFIER = "classIdentifier";
+	
 	/**
 	 * The ID of the class identifier that is responsible
 	 * for identifying the class
 	 * @return
 	 */
-	public String classIdentifierId();
+	public String classIdentifier();
 }

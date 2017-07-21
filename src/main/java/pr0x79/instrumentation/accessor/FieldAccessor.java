@@ -27,10 +27,12 @@ import pr0x79.instrumentation.identification.IFieldIdentifier;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface FieldAccessor {
+	public static final String FIELD_IDENTIFIER = "fieldIdentifier";
+	
 	/**
 	 * The ID of the field identifier that is responsible
 	 * for identifying the field
 	 * @return
 	 */
-	public String fieldIdentifierId();
+	public String fieldIdentifier();
 }

@@ -37,7 +37,6 @@ public class MethodCallInstructionIdentifier implements IInstructionIdentifier {
 			insn = it.next();
 			if(insn instanceof MethodInsnNode) {
 				MethodInsnNode methodNode = (MethodInsnNode) insn;
-				System.out.println(methodNode.owner + " " + methodNode.name + methodNode.desc);
 				for(int i = 0; i < this.owners.length; i++) {
 					String owner = this.owners[i];
 					MethodDescription methodDescription = this.methods[i];

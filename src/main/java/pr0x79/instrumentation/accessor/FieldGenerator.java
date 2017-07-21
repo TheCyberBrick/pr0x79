@@ -17,6 +17,8 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface FieldGenerator {
+	public static final String FIELD_NAME = "fieldName";
+	
 	/**
 	 * Name of the field to be generated and proxied
 	 * @return
