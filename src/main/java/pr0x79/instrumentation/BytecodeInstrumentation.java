@@ -1,6 +1,5 @@
 package pr0x79.instrumentation;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -35,26 +34,19 @@ import org.objectweb.asm.tree.analysis.Frame;
 
 import pr0x79.Bootstrapper;
 import pr0x79.instrumentation.accessor.Accessors;
-import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.FieldAccessorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.FieldGeneratorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.MethodAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
-import pr0x79.instrumentation.accessor.Interceptor;
-import pr0x79.instrumentation.accessor.InterceptorConditional;
-import pr0x79.instrumentation.accessor.InterceptorReturn;
-import pr0x79.instrumentation.accessor.LocalVar;
 import pr0x79.instrumentation.accessor.LocalVarData;
 import pr0x79.instrumentation.accessor.MethodInterceptorData;
-import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.exception.accessor.field.FieldAccessorTakenException;
 import pr0x79.instrumentation.exception.accessor.field.InvalidGetterTypeException;
 import pr0x79.instrumentation.exception.accessor.field.InvalidSetterTypeException;
 import pr0x79.instrumentation.exception.accessor.fieldgenerator.FieldGeneratorTakenException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodDescriptorException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodExceptionsException;
-import pr0x79.instrumentation.exception.accessor.method.InvalidMethodModifierException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidParameterTypeException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidReturnTypeException;
 import pr0x79.instrumentation.exception.accessor.method.MethodAccessorTakenException;
@@ -71,22 +63,12 @@ import pr0x79.instrumentation.identification.IClassIdentifier;
 import pr0x79.instrumentation.identification.IFieldIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier.MethodDescription;
-import pr0x79.instrumentation.identification.Identifiers;
 
 /**
  * Instruments classes using the registered {@link IAccessor}s
  */
 public class BytecodeInstrumentation {
 	private Accessors accessors;
-	private final Identifiers identifiers;
-
-	//A map is used so that there are no duplicates, the key consists of: <class name>#<method name><method descriptor>
-	private final Map<String, MethodInterceptorData> interceptors;
-
-	public BytecodeInstrumentation(Identifiers identifiers, Map<String, MethodInterceptorData> interceptors) {
-		this.identifiers = identifiers;
-		this.interceptors = interceptors;
-	}
 
 	/**
 	 * Sets the accessors
@@ -106,10 +88,11 @@ public class BytecodeInstrumentation {
 			if(accessor.getClassIdentifier() != null && isIdentifiedClass(accessor.getClassIdentifier(), cls)) {
 				return true;
 			}
-		}
-		for(MethodInterceptorData interceptor : this.interceptors.values()) {
-			if(interceptor.getClassIdentifier() != null && isIdentifiedClass(interceptor.getClassIdentifier(), cls)) {
-				return true;
+
+			for(MethodInterceptorData interceptor : accessor.getMethodInterceptors()) {
+				if(interceptor.getClassIdentifier() != null && isIdentifiedClass(interceptor.getClassIdentifier(), cls)) {
+					return true;
+				}
 			}
 		}
 		return false;
@@ -135,169 +118,66 @@ public class BytecodeInstrumentation {
 	 * @return True if modified
 	 */
 	public boolean instrumentAccessorClass(ClassNode clsNode, Bootstrapper bootstrapper) {
-		String classIdentifierId = getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, ClassAccessor.CLASS_IDENTIFIER, String.class, null);
-		if(classIdentifierId == null) {
-			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor annotation", clsNode.name));
-		}
+		ClassAccessorData accessor = this.accessors.getAccessorByClassName(Type.getObjectType(clsNode.name).getClassName());
 
-		Set<String> takenMethodNames = new HashSet<>();
-		for(MethodNode method : clsNode.methods) {
-			takenMethodNames.add(method.name);
-		}
-
-		List<LocalVarData> fieldRequiringLocalVars = new ArrayList<>();
-
-		for(MethodNode method : clsNode.methods) {
-			AnnotationNode interceptorAnnotation = null;
-			AnnotationNode instructionJumpAnnotation = null;
-			AnnotationNode returnAnnotation = null;
-
-			if(method.visibleAnnotations != null) {
-				for(AnnotationNode annotation : method.visibleAnnotations) {
-					if(annotation.desc.equals(Type.getDescriptor(Interceptor.class))) {
-						interceptorAnnotation = annotation;
-					}
-					if(annotation.desc.equals(Type.getDescriptor(InterceptorConditional.class))) {
-						instructionJumpAnnotation = annotation;
-					}
-					if(annotation.desc.equals(Type.getDescriptor(InterceptorReturn.class))) {
-						returnAnnotation = annotation;
-					}
-				}
-			}
-
-			if(interceptorAnnotation != null) {
-				if(instructionJumpAnnotation != null && returnAnnotation != null) {
-					throw new InstrumentorException(String.format("Method interceptor %s#%s has both the instruction jump annotation and a return annotation", clsNode.name, method.name + method.desc));
-				}
-
-				if(instructionJumpAnnotation == null) {
-					if(returnAnnotation == null && Type.getReturnType(method.desc).getSort() != Type.VOID) {
-						throw new InvalidReturnTypeException(String.format("Return type of method interceptor %s#%s is not void", clsNode.name, method.name + method.desc), null, clsNode.name, new MethodDescription(method.name, method.desc), void.class.getName(), Type.getReturnType(method.desc).getClassName());
-					}
-				} else {
-					if(Type.getReturnType(method.desc).getSort() != Type.BOOLEAN) {
-						throw new InvalidReturnTypeException(String.format("Return type of method interceptor %s#%s with instruction jump is not boolean", clsNode.name, method.name + method.desc), null, clsNode.name, new MethodDescription(method.name, method.desc), boolean.class.getName(), Type.getReturnType(method.desc).getClassName());
-					}
-				}
-
-				if((method.access & Opcodes.ACC_STATIC) != 0) {
-					throw new InvalidMethodModifierException(String.format("Method interceptor %s#%s is a static method", clsNode.name, method.name + method.desc), null, clsNode.name, new MethodDescription(method.name, method.desc), Modifier.STATIC);
-				}
-
-				List<LocalVarData> methodLocalVars = new ArrayList<>();
-				Type[] params = Type.getArgumentTypes(method.desc);
-				for(int i = 0; i < params.length; i++) {
-					AnnotationNode importAnnotation = null;
-					if(method.visibleParameterAnnotations != null && i < method.visibleParameterAnnotations.length) {
-						List<AnnotationNode> paramAnnotations = method.visibleParameterAnnotations[i];
-						if(paramAnnotations != null) {
-							for(AnnotationNode annotation : paramAnnotations) {
-								if(annotation.desc.equals(Type.getDescriptor(LocalVar.class))) {
-									importAnnotation = annotation;
-									break;
+		if(accessor != null) {
+			List<LocalVarData> fieldRequiringLocalVars = new ArrayList<>();
+			for(MethodInterceptorData interceptor : accessor.getMethodInterceptors()) {
+				if(!interceptor.isReturn()) {
+					for(MethodNode method : clsNode.methods) {
+						if(interceptor.getInterceptorMethod().equals(method.name) && interceptor.getInterceptorMethodDesc().equals(method.desc)) {
+							List<LocalVarData> methodLocalVars = interceptor.getLocalVars();
+							Type[] params = Type.getArgumentTypes(method.desc);
+							if(params.length > 0) {
+								Map<AbstractInsnNode, InsnList> insertionPoints = new HashMap<>();
+								Iterator<AbstractInsnNode> insnIT = method.instructions.iterator();
+								while(insnIT.hasNext()) {
+									AbstractInsnNode node = insnIT.next();
+									if(node.getOpcode() == Opcodes.RETURN ||
+											node.getOpcode() == Opcodes.ARETURN ||
+											node.getOpcode() == Opcodes.DRETURN ||
+											node.getOpcode() == Opcodes.FRETURN ||
+											node.getOpcode() == Opcodes.IRETURN ||
+											node.getOpcode() == Opcodes.LRETURN ||
+											node.getOpcode() == Opcodes.ATHROW) {
+										InsnList insertions = new InsnList();
+										int stackIndex = 1;
+										for(int i = 0; i < params.length; i++) {
+											LocalVarData localVar = methodLocalVars.get(i);
+											Type varType = Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()];
+											insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+											insertions.add(new VarInsnNode(varType.getOpcode(Opcodes.ILOAD), stackIndex));
+											insertions.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, clsNode.name, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, varType), true));
+											stackIndex += varType.getSize();
+										}
+										insertionPoints.put(node, insertions);
+									}
+								}
+								for(Entry<AbstractInsnNode, InsnList> insertion : insertionPoints.entrySet()) {
+									method.instructions.insertBefore(insertion.getKey(), insertion.getValue());
 								}
 							}
 						}
 					}
-					if(importAnnotation == null) {
-						throw new InstrumentorException(String.format("Parameter %d for method interceptor %s#%s does not have an @Import annotation", i, clsNode.name, method.name + method.desc));
-					}
-					String instructionIdentifierId = getAnnotationValue(importAnnotation, LocalVar.INSTRUCTION_IDENTIFIER, String.class);
-					if(instructionIdentifierId == null) {
-						throw new InstrumentorException(String.format("Import for parameter %d of method %s#%s has invalid arguments", i, clsNode.name, method.name + method.desc));
-					}
-					String generatedSetterName = this.getUniqueName(takenMethodNames);
-					takenMethodNames.add(generatedSetterName);
-					String generatedGetterName = this.getUniqueName(takenMethodNames);
-					takenMethodNames.add(generatedGetterName);
-					LocalVarData localVar = new LocalVarData(method.name, method.desc, i, Type.getObjectType(clsNode.name).getClassName(), instructionIdentifierId, generatedSetterName, generatedGetterName);
-					methodLocalVars.add(localVar);
-					if(returnAnnotation == null) {
-						fieldRequiringLocalVars.add(localVar);
-					}
-				}
 
-				if(params.length > 0) {
-					Map<AbstractInsnNode, InsnList> insertionPoints = new HashMap<>();
-					Iterator<AbstractInsnNode> insnIT = method.instructions.iterator();
-					while(insnIT.hasNext()) {
-						AbstractInsnNode node = insnIT.next();
-						if(node.getOpcode() == Opcodes.RETURN ||
-								node.getOpcode() == Opcodes.ARETURN ||
-								node.getOpcode() == Opcodes.DRETURN ||
-								node.getOpcode() == Opcodes.FRETURN ||
-								node.getOpcode() == Opcodes.IRETURN ||
-								node.getOpcode() == Opcodes.LRETURN ||
-								node.getOpcode() == Opcodes.ATHROW) {
-							InsnList insertions = new InsnList();
-							int stackIndex = 1;
-							for(int i = 0; i < params.length; i++) {
-								LocalVarData localVar = methodLocalVars.get(i);
-								Type varType = Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()];
-								insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
-								insertions.add(new VarInsnNode(varType.getOpcode(Opcodes.ILOAD), stackIndex));
-								insertions.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, clsNode.name, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, varType), true));
-								stackIndex += varType.getSize();
-							}
-							insertionPoints.put(node, insertions);
-						}
-					}
-					for(Entry<AbstractInsnNode, InsnList> insertion : insertionPoints.entrySet()) {
-						method.instructions.insertBefore(insertion.getKey(), insertion.getValue());
-					}
-				}
-
-				String methodIdentifierId = getAnnotationValue(interceptorAnnotation, Interceptor.METHOD_IDENTIFIER, String.class);
-				String instructionIdentifierId = getAnnotationValue(interceptorAnnotation, Interceptor.INSTRUCTION_IDENTIFIER, String.class);
-				String jumpInstructionIdentifierId = null;
-				if(instructionJumpAnnotation != null) {
-					jumpInstructionIdentifierId = getAnnotationValue(instructionJumpAnnotation, InterceptorConditional.INSTRUCTION_IDENTIFIER, String.class);
-				}
-				if(methodIdentifierId == null || instructionIdentifierId == null || (jumpInstructionIdentifierId != null && instructionJumpAnnotation == null)) {
-					throw new InstrumentorException(String.format("Method interceptor for method %s#%s has invalid arguments", clsNode.name, method.name + method.desc));
-				}
-
-				MethodInterceptorData methodInterceptor = new MethodInterceptorData(classIdentifierId, methodIdentifierId, instructionIdentifierId, jumpInstructionIdentifierId, Type.getObjectType(clsNode.name).getClassName(), method.name, method.desc, methodLocalVars, returnAnnotation != null);
-				methodInterceptor.initIdentifiers(this.identifiers);
-				this.interceptors.put(clsNode.name + "#" + method.name + method.desc, methodInterceptor);
-			}
-		}
-
-		for(LocalVarData localVar : fieldRequiringLocalVars) {
-			//Setter
-			MethodVisitor mvSetter = clsNode.visitMethod(Opcodes.ACC_ABSTRACT | Opcodes.ACC_PUBLIC, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
-			mvSetter.visitEnd();
-
-			//Getter
-			MethodVisitor mvGetter = clsNode.visitMethod(Opcodes.ACC_ABSTRACT | Opcodes.ACC_PUBLIC , localVar.getGeneratedGetterMethod(), Type.getMethodDescriptor(Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
-			mvGetter.visitEnd();
-		}
-
-		return !fieldRequiringLocalVars.isEmpty();
-	}
-
-	/**
-	 * Generates a unique name with the specified exclusions
-	 * @param clsNode
-	 * @return
-	 */
-	private String getUniqueName(Set<String> exclusions) {
-		List<String> checked = new ArrayList<String>();
-		checked.add("");
-		for(int maxLength = 1; maxLength <= 32; ++maxLength) {
-			int words = checked.size();
-			for(int i = 0; i < words; ++i) {
-				for(char c = 'a'; c <= 'z'; ++c) {
-					String name = checked.get(i) + c;
-					if(!exclusions.contains(name)) {
-						return name;
-					}
-					checked.add(name);
+					fieldRequiringLocalVars.addAll(interceptor.getLocalVars());
 				}
 			}
+
+			for(LocalVarData localVar : fieldRequiringLocalVars) {
+				//Setter
+				MethodVisitor mvSetter = clsNode.visitMethod(Opcodes.ACC_ABSTRACT | Opcodes.ACC_PUBLIC, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
+				mvSetter.visitEnd();
+
+				//Getter
+				MethodVisitor mvGetter = clsNode.visitMethod(Opcodes.ACC_ABSTRACT | Opcodes.ACC_PUBLIC , localVar.getGeneratedGetterMethod(), Type.getMethodDescriptor(Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
+				mvGetter.visitEnd();
+			}
+
+			return !fieldRequiringLocalVars.isEmpty();
 		}
-		return null;
+
+		return false;
 	}
 
 	/**
@@ -363,15 +243,13 @@ public class BytecodeInstrumentation {
 
 		clsNode.visit(clsNode.version, clsNode.access, clsNode.name, clsNode.signature, clsNode.superName, interfaces);
 
-		//Instrument accessor methods
+		//Instrument accessor and interceptor methods
 		for(ClassAccessorData classAccessor : classAccessors) {
 			this.instrumentFieldAccessors(clsNode, classAccessor);
 			this.instrumentFieldGenerators(clsNode, classAccessor);
 			this.instrumentMethodAccessors(clsNode, classAccessor);
+			this.instrumentMethodInterceptors(clsNode, classAccessor);
 		}
-
-		//Instrument interceptors
-		this.instrumentMethodInterceptors(clsNode);
 	}
 
 	/**
@@ -687,9 +565,9 @@ public class BytecodeInstrumentation {
 	 * @param interceptor
 	 * @param clsNode
 	 */
-	private void instrumentMethodInterceptors(ClassNode clsNode) {
+	private void instrumentMethodInterceptors(ClassNode clsNode, ClassAccessorData classAccessor) {
 		List<MethodInterceptorData> classInterceptors = new ArrayList<>();
-		for(MethodInterceptorData interceptor : this.interceptors.values()) {
+		for(MethodInterceptorData interceptor : classAccessor.getMethodInterceptors()) {
 			if(isIdentifiedClass(interceptor.getClassIdentifier(), clsNode.name)) {
 				classInterceptors.add(interceptor);
 			}
@@ -703,7 +581,7 @@ public class BytecodeInstrumentation {
 					for(FieldNode field : clsNode.fields) {
 						takenFieldNames.add(field.name);
 					}
-					String generatedField = this.getUniqueName(takenFieldNames);
+					String generatedField = getUniqueName(takenFieldNames);
 					Type fieldType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[localVar.getParameterIndex()];
 
 					clsNode.visitField(Opcodes.ACC_PRIVATE, generatedField, fieldType.getDescriptor(), null, null);
@@ -882,6 +760,29 @@ public class BytecodeInstrumentation {
 	}
 
 	/**
+	 * Generates a unique name with the specified exclusions
+	 * @param exclusions
+	 * @return
+	 */
+	public static String getUniqueName(Set<String> exclusions) {
+		List<String> checked = new ArrayList<String>();
+		checked.add("");
+		for(int maxLength = 1; maxLength <= 32; ++maxLength) {
+			int words = checked.size();
+			for(int i = 0; i < words; ++i) {
+				for(char c = 'a'; c <= 'z'; ++c) {
+					String name = checked.get(i) + c;
+					if(!exclusions.contains(name)) {
+						return name;
+					}
+					checked.add(name);
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Checks if the method accessor parameters and return types are valid for the specified desc of the method
 	 * @param desc The desc of the original method
 	 * @param method The proxy method
@@ -951,18 +852,22 @@ public class BytecodeInstrumentation {
 	 * @return
 	 */
 	public boolean isGeneratedMethod(String className, MethodNode method) {
-		for(MethodInterceptorData interceptor : this.interceptors.values()) {
-			if(interceptor.getAccessorClass().equals(className)) {
-				for(LocalVarData localVar : interceptor.getLocalVars()) {
-					Type localVarType = Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()];
-					boolean isGetter = 
-							localVar.getGeneratedGetterMethod().equals(method.name) && 
-							Type.getMethodDescriptor(localVarType).equals(method.desc);
-					boolean isSetter = 
-							localVar.getGeneratedSetterMethod().equals(method.name) && 
-							Type.getMethodDescriptor(Type.VOID_TYPE, localVarType).equals(method.desc);
-					if(isGetter || isSetter) {
-						return true;
+		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
+			if(isIdentifiedClass(accessor.getClassIdentifier(), className)) {
+				for(MethodInterceptorData interceptor : accessor.getMethodInterceptors()) {
+					if(interceptor.getAccessorClass().equals(className)) {
+						for(LocalVarData localVar : interceptor.getLocalVars()) {
+							Type localVarType = Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()];
+							boolean isGetter = 
+									localVar.getGeneratedGetterMethod().equals(method.name) && 
+									Type.getMethodDescriptor(localVarType).equals(method.desc);
+							boolean isSetter = 
+									localVar.getGeneratedSetterMethod().equals(method.name) && 
+									Type.getMethodDescriptor(Type.VOID_TYPE, localVarType).equals(method.desc);
+							if(isGetter || isSetter) {
+								return true;
+							}
+						}
 					}
 				}
 			}

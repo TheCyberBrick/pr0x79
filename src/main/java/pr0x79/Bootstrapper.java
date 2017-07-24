@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -25,8 +24,6 @@ import pr0x79.instrumentation.accessor.Accessors;
 import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
-import pr0x79.instrumentation.accessor.Interceptors;
-import pr0x79.instrumentation.accessor.MethodInterceptorData;
 import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.identification.Identifiers;
 
@@ -36,7 +33,6 @@ public class Bootstrapper {
 	private final Identifiers identifiers;
 	private final Accessors accessors;
 	private final BytecodeInstrumentation instrumentor;
-	private final Interceptors interceptors;
 
 	//Contains all accessor classes that were loaded through the class transformer
 	private final Map<ClassLoader, Set<String>> internallyLoadedAccessorClasses = new WeakHashMap<ClassLoader, Set<String>>();
@@ -46,9 +42,7 @@ public class Bootstrapper {
 
 	private Bootstrapper() {
 		this.identifiers = new Identifiers(this);
-		Map<String, MethodInterceptorData> interceptorMap = new ConcurrentHashMap<>();
-		this.instrumentor = new BytecodeInstrumentation(this.identifiers, interceptorMap);
-		this.interceptors = new Interceptors(interceptorMap);
+		this.instrumentor = new BytecodeInstrumentation();
 		this.accessors = new Accessors(this, this.identifiers, this.instrumentor);
 		this.instrumentor.setAccessors(this.accessors);
 	}
@@ -86,7 +80,7 @@ public class Bootstrapper {
 	 * @param className
 	 * @return
 	 */
-	private boolean wasAccessorLoadedInternally(ClassLoader loader, String className) {
+	public boolean wasAccessorLoadedInternally(ClassLoader loader, String className) {
 		while(loader != null) {
 			synchronized(this.internallyLoadedAccessorClasses) {
 				Set<String> classes = this.internallyLoadedAccessorClasses.get(loader);
@@ -178,22 +172,21 @@ public class Bootstrapper {
 		}
 
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			try {
-				@SuppressWarnings("unchecked")
-				Class<IAccessor> accessorCls = (Class<IAccessor>) Bootstrapper.class.getClassLoader().loadClass(accessor.getAccessorClass());
-				if(!this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), accessorCls.getName())) {
-					throw new InstrumentorException(String.format("Accessor class %s was already loaded before the bootstrapper initialization!", accessorCls.getName()));
-				}
-			} catch (ClassNotFoundException e) {
-				bootstrapperInitExceptions.add(e);
+			if(this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), accessor.getAccessorClass())) {
+				throw new InstrumentorException(String.format("Accessor class %s was already loaded before or during the bootstrapper initialization!", accessor.getAccessorClass()));
 			}
 		}
 
-		for(MethodInterceptorData interceptor : this.interceptors.getMethodInterceptors()) {
+		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
 			try {
-				interceptor.initIdentifiers(identifiers);
-			} catch(Exception ex) {
-				bootstrapperInitExceptions.add(ex);
+				@SuppressWarnings("unchecked")
+				Class<IAccessor> accessorCls = (Class<IAccessor>) Bootstrapper.class.getClassLoader().loadClass(accessor.getAccessorClass());
+
+				if(!this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), accessorCls.getName())) {
+					throw new InstrumentorException(String.format("Accessor class %s could not be loaded properly!", accessorCls.getName()));
+				}
+			} catch (ClassNotFoundException e) {
+				bootstrapperInitExceptions.add(e);
 			}
 		}
 
@@ -257,14 +250,6 @@ public class Bootstrapper {
 	 */
 	public Accessors getAccessors() {
 		return this.accessors;
-	}
-
-	/**
-	 * Returns the method interceptors
-	 * @return
-	 */
-	public Interceptors getInterceptors() {
-		return this.interceptors;
 	}
 
 	/**
