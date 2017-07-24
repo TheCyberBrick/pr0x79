@@ -360,6 +360,7 @@ public class BytecodeInstrumentation {
 			interfaces[i] = accessor.getAccessorClass().replace('.', '/');
 			i++;
 		}
+
 		clsNode.visit(clsNode.version, clsNode.access, clsNode.name, clsNode.signature, clsNode.superName, interfaces);
 
 		//Instrument accessor methods
@@ -520,8 +521,8 @@ public class BytecodeInstrumentation {
 			}
 			MethodVisitor mv = clsNode.visitMethod(Opcodes.ACC_PUBLIC, accessorMethod.name, 
 					accessorMethod.desc, 
-					Type.getReturnType(accessorMethod.desc).getDescriptor(), targetExceptions.toArray(new String[0]));
-			this.instrumentMethodCaller(mv, clsNode, targetMethod, accessorMethod, methodAccessor.isInterfaceMethod());
+					accessorMethod.signature, targetExceptions.toArray(new String[0]));
+			this.instrumentMethodCaller(mv, clsNode, targetMethod, accessorMethod, (clsNode.access & Opcodes.ACC_INTERFACE) != 0);
 		}
 	}
 
@@ -568,7 +569,7 @@ public class BytecodeInstrumentation {
 			stackIndex += targetMethodParams[paramIndex].getSize();
 			paramIndex++;
 		}
-		mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, clsNode.name, targetMethod.name, targetMethod.desc, isInterfaceMethod);
+		mv.visitMethodInsn(isInterfaceMethod ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL, clsNode.name, targetMethod.name, targetMethod.desc, isInterfaceMethod);
 		Type returnType = Type.getReturnType(accessorMethod.desc);
 		if(returnType.getSort() == Type.VOID) {
 			mv.visitInsn(Opcodes.RETURN);

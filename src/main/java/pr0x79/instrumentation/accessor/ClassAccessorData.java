@@ -27,6 +27,7 @@ public class ClassAccessorData {
 	private final List<MethodAccessorData> methodAccessors = new ArrayList<>();
 	private final List<FieldAccessorData> fieldAccessors = new ArrayList<>();
 	private final List<FieldGeneratorData> fieldGenerators = new ArrayList<>();
+	private final List<MethodInterceptorData> methodInterceptors = new ArrayList<>();
 
 	public ClassAccessorData(String identifierId, Identifiers identifiers, String accessorClass, ClassNode clsNode, IClassIdentifier classIdentifier, BytecodeInstrumentation instrumentor) {
 		this.identifierId = identifierId;
@@ -35,7 +36,6 @@ public class ClassAccessorData {
 
 		for(MethodNode method : clsNode.methods) {
 			String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, MethodAccessor.METHOD_IDENTIFIER, String.class, null);
-			boolean interfaceMethod = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, MethodAccessor.IS_INTERFACE_METHOD, boolean.class, false);
 			if(methodIdentifierId != null) {
 				if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 					throw new InstrumentorException(String.format("Method accessor %s#%s is a default method", accessorClass, method.name + method.desc));
@@ -47,7 +47,7 @@ public class ClassAccessorData {
 				if(methodIdentifier == null) {
 					throw new InstrumentorException(String.format("Method identifier %s:%s is not registered", accessorClass, methodIdentifierId));
 				}
-				this.methodAccessors.add(new MethodAccessorData(methodIdentifierId, interfaceMethod, method, methodIdentifier));
+				this.methodAccessors.add(new MethodAccessorData(methodIdentifierId, method, methodIdentifier));
 			}
 
 			//Field accessors
@@ -112,82 +112,6 @@ public class ClassAccessorData {
 				throw new InstrumentorException(String.format("Class accessor %s has an abstract method: %s", accessorClass, method.name + method.desc));
 			}
 		}
-
-		/*for(Method method : accessorClass.getDeclaredMethods()) {
-			//Method accessors
-			MethodAccessor methodAccessor = method.getAnnotation(MethodAccessor.class);
-			if(methodAccessor != null) {
-				if(method.isDefault()) {
-					throw new InstrumentorException(String.format("Method accessor %s#%s is a default method", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method)));
-				}
-				if((method.getModifiers() & Modifier.STATIC) != 0) {
-					throw new InstrumentorException(String.format("Method accessor %s#%s is a static method", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method)));
-				}
-				IMethodIdentifier methodIdentifier = identifiers.getMethodIdentifier(methodAccessor.methodIdentifierId());
-				if(methodIdentifier == null) {
-					throw new InstrumentorException(String.format("Method identifier %s:%s is not registered", accessorClass.getName(), methodAccessor.methodIdentifierId()));
-				}
-				this.methodAccessors.add(new MethodAccessorData(methodAccessor.methodIdentifierId(), methodAccessor.isInterfaceMethod(), method, methodIdentifier));
-			}
-
-			//Field accessors
-			FieldAccessor fieldAccessor = method.getAnnotation(FieldAccessor.class);
-			if(fieldAccessor != null) {
-				if(method.isDefault()) {
-					throw new InstrumentorException(String.format("Field accessor %s#%s is a default method", accessorClass.getName(), method.getName()));
-				}
-				if((method.getModifiers() & Modifier.STATIC) != 0) {
-					throw new InstrumentorException(String.format("Field accessor %s#%s is a static method", accessorClass.getName(), method.getName()));
-				}
-				if(method.getExceptionTypes().length > 0) {
-					throw new InstrumentorException(String.format("Field accessor %s#%s throws Exceptions", accessorClass.getName(), method.getName()));
-				}
-				IFieldIdentifier fieldIdentifier = identifiers.getFieldIdentifier(fieldAccessor.fieldIdentifierId());
-				if(fieldIdentifier == null) {
-					throw new InstrumentorException(String.format("Field identifier %s:%s is not registered", accessorClass.getName(), fieldAccessor.fieldIdentifierId()));
-				}
-				if(method.getParameterTypes().length > 0) {
-					if(method.getParameterTypes().length != 1) {
-						throw new InstrumentorException(String.format("Field accessor (setter?) %s#%s does not have exactly one parameter", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method)));
-					}
-					if(!method.getReturnType().equals(Void.TYPE) && !method.getReturnType().equals(accessorClass) && !method.getReturnType().equals(method.getParameterTypes()[0])) {
-						throw new InstrumentorException(String.format("Field accessor (setter?) %s#%s does not have return type void, %s or %s", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method), accessorClass.getName(), method.getParameterTypes()[0].getName()));
-					}
-					this.fieldAccessors.add(new FieldAccessorData(fieldAccessor.fieldIdentifierId(), true, method, fieldIdentifier));
-				} else {
-					this.fieldAccessors.add(new FieldAccessorData(fieldAccessor.fieldIdentifierId(), false, method, fieldIdentifier));
-				}
-			}
-
-			//Field generators
-			FieldGenerator fieldGenerator = method.getAnnotation(FieldGenerator.class);
-			if(fieldGenerator != null) {
-				if(method.isDefault()) {
-					throw new InstrumentorException(String.format("Field generator %s#%s is a default method", accessorClass.getName(), method.getName()));
-				}
-				if((method.getModifiers() & Modifier.STATIC) != 0) {
-					throw new InstrumentorException(String.format("Field generator %s#%s is a static method", accessorClass.getName(), method.getName()));
-				}
-				if(method.getExceptionTypes().length > 0) {
-					throw new InstrumentorException(String.format("Field generator %s#%s throws Exceptions", accessorClass.getName(), method.getName()));
-				}
-				if(method.getParameterTypes().length > 0) {
-					if(method.getParameterTypes().length != 1) {
-						throw new InstrumentorException(String.format("Field generator (setter?) %s#%s does not have exactly one parameter", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method)));
-					}
-					if(!method.getReturnType().equals(Void.TYPE) && !method.getReturnType().equals(accessorClass) && !method.getReturnType().equals(method.getParameterTypes()[0])) {
-						throw new InstrumentorException(String.format("Field generator (setter?) %s#%s does not have return type void, %s or %s", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method), accessorClass.getName(), method.getParameterTypes()[0].getName()));
-					}
-					this.fieldGenerators.add(new FieldGeneratorData(fieldGenerator.fieldName(), method.getParameterTypes()[0], true, method));
-				} else {
-					this.fieldGenerators.add(new FieldGeneratorData(fieldGenerator.fieldName(), method.getReturnType(), false, method));
-				}
-			}
-
-			if(fieldAccessor == null && methodAccessor == null && fieldGenerator == null && !method.isDefault() && !Modifier.isStatic(method.getModifiers()) && !instrumentor.isGeneratedMethod(method)) {
-				throw new InstrumentorException(String.format("Class accessor %s has an abstract method: %s", accessorClass.getName(), method.getName() + Type.getMethodDescriptor(method)));
-			}
-		}*/
 	}
 
 	/**
@@ -223,6 +147,14 @@ public class ClassAccessorData {
 	}
 
 	/**
+	 * Returns a list of all method interceptors
+	 * @return
+	 */
+	public List<MethodInterceptorData> getMethodInterceptors() {
+		return Collections.unmodifiableList(this.methodInterceptors);
+	}
+
+	/**
 	 * Returns a list of all field accessors
 	 * @return
 	 */
@@ -243,23 +175,13 @@ public class ClassAccessorData {
 	 */
 	public static class MethodAccessorData {
 		private final String identifierId;
-		private final boolean isInterfaceMethod;
 		private final MethodNode accessorMethod;
 		private final IMethodIdentifier methodIdentifier;
 
-		private MethodAccessorData(String identifierId, boolean isInterfaceMethod, MethodNode accessorMethod, IMethodIdentifier methodIdentifier) {
+		private MethodAccessorData(String identifierId, MethodNode accessorMethod, IMethodIdentifier methodIdentifier) {
 			this.identifierId = identifierId;
 			this.accessorMethod = accessorMethod;
 			this.methodIdentifier = methodIdentifier;
-			this.isInterfaceMethod = isInterfaceMethod;
-		}
-
-		/**
-		 * Returns whether the method to be proxied is from an interface
-		 * @return
-		 */
-		public boolean isInterfaceMethod() {
-			return this.isInterfaceMethod;
 		}
 
 		/**

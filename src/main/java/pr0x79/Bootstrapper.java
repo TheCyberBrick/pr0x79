@@ -20,6 +20,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
 import pr0x79.instrumentation.BytecodeInstrumentation;
+import pr0x79.instrumentation.InstrumentationClassWriter;
 import pr0x79.instrumentation.accessor.Accessors;
 import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.ClassAccessorData;
@@ -133,7 +134,7 @@ public class Bootstrapper {
 					}
 
 					if(modified) {
-						ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+						ClassWriter classWriter = new InstrumentationClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 						clsNode.accept(classWriter);
 						return classWriter.toByteArray();
 					}

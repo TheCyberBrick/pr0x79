@@ -59,7 +59,7 @@ public class Accessors {
 
 		String classIdentifierId = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, ClassAccessor.CLASS_IDENTIFIER, String.class, null);
 		if(classIdentifierId == null) {
-			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor", className));
+			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor annotation", className));
 		}
 
 		IClassIdentifier clsIdentifier = null;
