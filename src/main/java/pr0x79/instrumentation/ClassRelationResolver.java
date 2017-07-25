@@ -1,4 +1,4 @@
-package pr0x79;
+package pr0x79.instrumentation;
 
 import java.io.IOException;
 import java.io.InputStream;

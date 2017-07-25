@@ -34,7 +34,6 @@ import org.objectweb.asm.tree.analysis.BasicValue;
 import org.objectweb.asm.tree.analysis.Frame;
 
 import pr0x79.Bootstrapper;
-import pr0x79.ClassRelationResolver;
 import pr0x79.instrumentation.accessor.Accessors;
 import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.FieldAccessorData;
