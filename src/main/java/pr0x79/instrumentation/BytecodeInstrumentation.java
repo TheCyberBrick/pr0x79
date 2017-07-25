@@ -1,5 +1,6 @@
 package pr0x79.instrumentation;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,6 +34,7 @@ import org.objectweb.asm.tree.analysis.BasicValue;
 import org.objectweb.asm.tree.analysis.Frame;
 
 import pr0x79.Bootstrapper;
+import pr0x79.ClassRelationResolver;
 import pr0x79.instrumentation.accessor.Accessors;
 import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.FieldAccessorData;
@@ -41,6 +43,7 @@ import pr0x79.instrumentation.accessor.ClassAccessorData.MethodAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
 import pr0x79.instrumentation.accessor.LocalVarData;
 import pr0x79.instrumentation.accessor.MethodInterceptorData;
+import pr0x79.instrumentation.exception.accessor.ClassRelationResolverException;
 import pr0x79.instrumentation.exception.accessor.field.FieldAccessorTakenException;
 import pr0x79.instrumentation.exception.accessor.field.InvalidGetterTypeException;
 import pr0x79.instrumentation.exception.accessor.field.InvalidSetterTypeException;
@@ -338,7 +341,7 @@ public class BytecodeInstrumentation {
 		boolean generate = true;
 		for(FieldNode field : clsNode.fields) {
 			if(field.name.equals(fieldGenerator.getFieldName())) {
-				if(!this.isTypeEqualOrAccessor(Type.getType(field.desc), fieldGenerator.getFieldType())) {
+				if(!this.isTypeInstanceof(Type.getType(field.desc), fieldGenerator.getFieldType())) {
 					throw new FieldGeneratorTakenException(String.format("Field %s for field generator %s#%s is already taken", fieldGenerator.getFieldName(), accessorClass, accessorMethod.name + accessorMethod.desc), accessorClass, new MethodDescription(accessorMethod.name, accessorMethod.desc), fieldGenerator.getFieldName());
 				}
 				generate = false;
@@ -676,7 +679,7 @@ public class BytecodeInstrumentation {
 				Type localVarType = Type.getType(importLocalVariable.desc);
 				Type paramType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[importData.getParameterIndex()];
 				ClassAccessorData paramAsAccessor = this.accessors.getAccessorByClassName(paramType.getClassName());
-				if((paramAsAccessor != null && !this.isTypeEqualOrAccessor(localVarType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !paramType.equals(localVarType))) {
+				if((paramAsAccessor != null && !this.isTypeInstanceof(localVarType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !paramType.equals(localVarType))) {
 					throw new InvalidParameterTypeException(String.format("Import parameter %d of method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class. Local variable index: %d. Local variable identifier: %s", importData.getParameterIndex(), interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), paramType.getClassName(), Type.getType(importLocalVariable.desc).getClassName(), importLocalVariable.index, importData.getInstructionIdentifierId()), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getParameterIndex(), paramType.getClassName(), Type.getType(importLocalVariable.desc).getClassName());
 				}
 				insertions.add(new VarInsnNode(paramType.getOpcode(Opcodes.ILOAD), importLocalVariable.index));
@@ -690,7 +693,7 @@ public class BytecodeInstrumentation {
 				Type returnType = Type.getReturnType(targetMethod.desc);
 				Type interceptorReturnType = Type.getReturnType(interceptor.getInterceptorMethodDesc());
 				ClassAccessorData paramAsAccessor = this.accessors.getAccessorByClassName(interceptorReturnType.getClassName());
-				if((paramAsAccessor != null && !this.isTypeEqualOrAccessor(returnType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !returnType.equals(interceptorReturnType))) {
+				if((paramAsAccessor != null && !this.isTypeInstanceof(returnType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !returnType.equals(interceptorReturnType))) {
 					throw new InvalidReturnTypeException(String.format("Return type of method interceptor for method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class", interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), interceptorReturnType.getClassName(), returnType.getClassName()), null, interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), interceptorReturnType.getClassName(), returnType.getClassName());
 				}
 				if(paramAsAccessor != null) {
@@ -790,7 +793,7 @@ public class BytecodeInstrumentation {
 	 */
 	private boolean isMethodAccessorValid(String desc, MethodNode method) {
 		Type returnType = Type.getReturnType(desc);
-		if(!this.isTypeEqualOrAccessor(returnType, Type.getReturnType(method.desc))) {
+		if(!this.isTypeInstanceof(returnType, Type.getReturnType(method.desc))) {
 			return false;
 		}
 		Type[] methodParams = Type.getArgumentTypes(method.desc);
@@ -799,7 +802,7 @@ public class BytecodeInstrumentation {
 			return false;
 		}
 		for(int i = 0; i < descParams.length; i++) {
-			if(!this.isTypeEqualOrAccessor(descParams[i], methodParams[i])) {
+			if(!this.isTypeInstanceof(descParams[i], methodParams[i])) {
 				return false;
 			}
 		}
@@ -813,7 +816,7 @@ public class BytecodeInstrumentation {
 	 * @return
 	 */
 	private boolean isGetterTypeValidForField(String desc, MethodNode method) {
-		return this.isTypeEqualOrAccessor(Type.getType(desc), Type.getReturnType(method.desc));
+		return this.isTypeInstanceof(Type.getType(desc), Type.getReturnType(method.desc));
 	}
 
 	/**
@@ -823,7 +826,7 @@ public class BytecodeInstrumentation {
 	 * @return
 	 */
 	private boolean isSetterTypeValidForField(String desc, MethodNode method) {
-		return this.isTypeEqualOrAccessor(Type.getType(desc), Type.getArgumentTypes(method.desc)[0]);
+		return this.isTypeInstanceof(Type.getType(desc), Type.getArgumentTypes(method.desc)[0]);
 	}
 
 	/**
@@ -831,20 +834,53 @@ public class BytecodeInstrumentation {
 	 * If cls is an {@link IAccessor} a check is run if
 	 * that accessor was registered and belongs to the first specified type.
 	 * @param type The type of the original, to be proxied, code
-	 * @param proxyType The type of the proxy's method
+	 * @param otherType The type of the proxy's method
 	 * @return
 	 */
-	private boolean isTypeEqualOrAccessor(Type type, Type proxyType) {
-		if(type.getSort() == Type.OBJECT && this.accessors.getAccessorByClassName(proxyType.getClassName()) != null) {
-			ClassAccessorData accessorInstance = this.accessors.getAccessorByClassName(proxyType.getClassName());
-			if(accessorInstance == null) {
-				return false;
+
+	/**
+	 * Returns whether type is an instance of otherType taking the accessors into account.
+	 * Equivalent to <pre>otherType.isAssignableFrom(type)</pre>
+	 * @param type
+	 * @param otherType
+	 * @return
+	 */
+	private boolean isTypeInstanceof(Type type, Type otherType) {
+		if(type.getSort() == Type.OBJECT && otherType.getSort() == Type.OBJECT) {
+			//Get accessor data of otherType, if otherType is an accessor
+			final ClassAccessorData accessorInstance = this.accessors.getAccessorByClassName(otherType.getClassName());
+
+			IOException resolverException = null;
+
+			try {
+				ClassRelationResolver relation = new ClassRelationResolver(type.getInternalName());
+				return relation.traverseSuperclasses(cls -> {
+					if(cls.equals(otherType.getInternalName())) {
+						//type extends or implements otherType
+						return true;
+					}
+
+					if(accessorInstance != null) {
+						//Check if accessor is an accesor of this superclass/-interface
+						if(isIdentifiedClass(accessorInstance.getClassIdentifier(), cls)) {
+							return true;
+						}
+					}
+
+					return false;
+				}, true);
+			} catch(IOException ex) {
+				resolverException = ex;
 			}
-			if(isIdentifiedClass(accessorInstance.getClassIdentifier(), type.getInternalName())) {
+
+			//If resolver fails, try to directly check if otherType is an accessor of type
+			if(accessorInstance != null && isIdentifiedClass(accessorInstance.getClassIdentifier(), type.getInternalName())) {
 				return true;
 			}
+
+			throw new ClassRelationResolverException(String.format("Class relation resolver failed for classes %s and %s", type.getClassName(), otherType.getClassName()), type, otherType, resolverException);
 		}
-		return type.getClassName().equals(proxyType.getClassName());
+		return type.getClassName().equals(otherType.getClassName());
 	}
 
 	/**
