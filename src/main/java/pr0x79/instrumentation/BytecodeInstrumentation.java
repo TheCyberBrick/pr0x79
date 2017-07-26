@@ -839,22 +839,34 @@ public class BytecodeInstrumentation {
 
 	/**
 	 * Returns whether type is an instance of otherType taking the accessors into account.
-	 * Equivalent to <pre>otherType.isAssignableFrom(type)</pre>
+	 * Equivalent to <pre>otherType.isAssignableFrom(type)</pre> 
+	 * In case of arrays their elementary type is compared
 	 * @param type
 	 * @param otherType
 	 * @return
 	 */
 	private boolean isTypeInstanceof(Type type, Type otherType) {
+		if(type.getSort() == Type.ARRAY && otherType.getSort() == Type.ARRAY) {
+			type = type.getElementType();
+			otherType = otherType.getElementType();
+		}
 		if(type.getSort() == Type.OBJECT && otherType.getSort() == Type.OBJECT) {
+			//If type is not a primitive it can always be cast to Object
+			if("java/lang/Object".equals(otherType.getInternalName())) {
+				return true;
+			}
+
 			//Get accessor data of otherType, if otherType is an accessor
 			final ClassAccessorData accessorInstance = this.accessors.getAccessorByClassName(otherType.getClassName());
 
 			IOException resolverException = null;
 
+			final Type finalOtherType = otherType;
+
 			try {
 				ClassRelationResolver relation = new ClassRelationResolver(type.getInternalName());
 				return relation.traverseSuperclasses(cls -> {
-					if(cls.equals(otherType.getInternalName())) {
+					if(cls.equals(finalOtherType.getInternalName())) {
 						//type extends or implements otherType
 						return true;
 					}
