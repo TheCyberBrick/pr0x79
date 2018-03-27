@@ -6,6 +6,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import pr0x79.instrumentation.Internal;
+
 /**
  * See {@link FieldAccessor}.
  * This annotation additionally causes the parent {@link IAccessor}
@@ -17,11 +19,10 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface FieldGenerator {
-	public static final String FIELD_NAME = "fieldName";
-	
 	/**
 	 * Name of the field to be generated and proxied
 	 * @return
 	 */
+	@Internal(id = "field_name")
 	public String fieldName();
 }

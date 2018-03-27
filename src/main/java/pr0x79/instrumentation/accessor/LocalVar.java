@@ -6,6 +6,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import pr0x79.instrumentation.Internal;
+
 /**
  * This annotation must be added to all the parameters of a {@link Interceptor}
  * method. The parameters will have the value of the identified local variable
@@ -15,12 +17,11 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 @Target(PARAMETER)
 public @interface LocalVar {
-	public static final String INSTRUCTION_IDENTIFIER = "instructionIdentifier";
-
 	/**
 	 * The ID of the local variable instruction identifier that is responsible
 	 * for identifying the local variable to be imported
 	 * @return
 	 */
+	@Internal(id = "instruction_identifier")
 	public String instructionIdentifier();
 }

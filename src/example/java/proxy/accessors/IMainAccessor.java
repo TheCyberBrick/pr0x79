@@ -3,6 +3,7 @@ package proxy.accessors;
 import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.FieldAccessor;
 import pr0x79.instrumentation.accessor.IAccessor;
+import pr0x79.instrumentation.accessor.IInterceptorContext;
 import pr0x79.instrumentation.accessor.Interceptor;
 
 @ClassAccessor(classIdentifier = "Main")
@@ -12,7 +13,7 @@ public interface IMainAccessor extends IAccessor {
 	 * This method intercepts Main's constructor at the first return instruction (or at the end of the method, if not return is used)
 	 */
 	@Interceptor(methodIdentifier = "Main_ctor", instructionIdentifier = "first_return")
-	public default void ctor() {
+	public default void ctor(IInterceptorContext context) {
 		System.out.println("\n--------Interception--------");
 		System.out.println("Main constructor intercepted!");
 
@@ -43,13 +44,13 @@ public interface IMainAccessor extends IAccessor {
 	 * These two methods intercept before and after the SomeClass#print call in Main#init
 	 */
 	@Interceptor(methodIdentifier = "Main_init", instructionIdentifier = "before_init_print")
-	public default void interceptInitBeforePrint() {
+	public default void interceptInitBeforePrint(IInterceptorContext context) {
 		System.out.println("--------Interception--------");
 		System.out.println("Main#init before SomeClass#print call intercepted!");
 		System.out.println("-----------------------------");
 	}
 	@Interceptor(methodIdentifier = "Main_init", instructionIdentifier = "after_init_print")
-	public default void interceptInitAfterPrint() {
+	public default void interceptInitAfterPrint(IInterceptorContext context) {
 		System.out.println("\n--------Interception--------");
 		System.out.println("Main#init after SomeClass#print call intercepted!");
 		System.out.println("-----------------------------");

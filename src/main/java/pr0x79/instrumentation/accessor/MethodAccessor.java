@@ -6,6 +6,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import pr0x79.instrumentation.Internal;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 
 /**
@@ -23,12 +24,11 @@ import pr0x79.instrumentation.identification.IMethodIdentifier;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface MethodAccessor {
-	public static final String METHOD_IDENTIFIER = "methodIdentifier";
-
 	/**
 	 * The ID of the method identifier that is responsible
 	 * for identifying the method
 	 * @return
 	 */
+	@Internal(id = "method_identifier")
 	public String methodIdentifier();
 }

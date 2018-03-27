@@ -1,9 +1,13 @@
 package proxy.accessors;
 
+import java.util.List;
+import java.util.Map;
+
 import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.FieldAccessor;
 import pr0x79.instrumentation.accessor.FieldGenerator;
 import pr0x79.instrumentation.accessor.IAccessor;
+import pr0x79.instrumentation.accessor.IInterceptorContext;
 import pr0x79.instrumentation.accessor.Interceptor;
 import pr0x79.instrumentation.accessor.LocalVar;
 import pr0x79.instrumentation.accessor.MethodAccessor;
@@ -15,20 +19,23 @@ public interface ISomeClassAccessor extends IAccessor {
 	 * This method runs SomeClass#print(String)
 	 */
 	@MethodAccessor(methodIdentifier = "SomeClass_print")
-	public void printAccessor(String input);
+	public Map printAccessor(String input);
 
 	/*
 	 * This method intercepts SomeClass#print(String) right at the beginning of the method and
 	 * sets the "input" parameter value to "intercepted input!"
 	 */
 	@Interceptor(methodIdentifier = "SomeClass_print", instructionIdentifier = "start")
-	public default void interceptPrint(@LocalVar(instructionIdentifier = "local_var_1") String input) {
+	public default <BS extends ISomeClassAccessor> void interceptPrint(@LocalVar(instructionIdentifier = "local_var_1") String input, 
+			IInterceptorContext<Map<String, List<BS>>> context) {
 		System.out.println("\n--------Interception--------");
 		System.out.println("SomeClass#print(String) intercepted!");
 		System.out.println("Parameter \"input\" is: " + input);
 		System.out.println("Changing parameter \"input\" to: \"intercepted input!\"");
 		input = "intercepted input!";
 		System.out.println("-----------------------------\n");
+		
+		//context.returnWith(null);
 	}
 
 	/*

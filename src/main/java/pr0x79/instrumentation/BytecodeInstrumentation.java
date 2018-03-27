@@ -1,6 +1,8 @@
 package pr0x79.instrumentation;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -14,6 +16,7 @@ import java.util.Set;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -22,6 +25,7 @@ import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -40,6 +44,7 @@ import pr0x79.instrumentation.accessor.ClassAccessorData.FieldAccessorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.FieldGeneratorData;
 import pr0x79.instrumentation.accessor.ClassAccessorData.MethodAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
+import pr0x79.instrumentation.accessor.IInterceptorContext;
 import pr0x79.instrumentation.accessor.LocalVarData;
 import pr0x79.instrumentation.accessor.MethodInterceptorData;
 import pr0x79.instrumentation.exception.accessor.ClassRelationResolverException;
@@ -47,18 +52,18 @@ import pr0x79.instrumentation.exception.accessor.field.FieldAccessorTakenExcepti
 import pr0x79.instrumentation.exception.accessor.field.InvalidGetterTypeException;
 import pr0x79.instrumentation.exception.accessor.field.InvalidSetterTypeException;
 import pr0x79.instrumentation.exception.accessor.fieldgenerator.FieldGeneratorTakenException;
+import pr0x79.instrumentation.exception.accessor.method.InvalidContextSignatureException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodDescriptorException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodExceptionsException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidParameterTypeException;
-import pr0x79.instrumentation.exception.accessor.method.InvalidReturnTypeException;
 import pr0x79.instrumentation.exception.accessor.method.MethodAccessorTakenException;
 import pr0x79.instrumentation.exception.identifier.field.FieldNotFoundException;
 import pr0x79.instrumentation.exception.identifier.field.MultipleFieldsIdentifiedException;
-import pr0x79.instrumentation.exception.identifier.instruction.ImportInstructionNotFoundException;
 import pr0x79.instrumentation.exception.identifier.instruction.InstructionNotFoundException;
 import pr0x79.instrumentation.exception.identifier.instruction.InstructionOutOfBoundsException;
 import pr0x79.instrumentation.exception.identifier.instruction.InvalidJumpTargetException;
 import pr0x79.instrumentation.exception.identifier.instruction.JumpInstructionNotFoundException;
+import pr0x79.instrumentation.exception.identifier.instruction.LocalVarInstructionNotFoundException;
 import pr0x79.instrumentation.exception.identifier.method.MethodNotFoundException;
 import pr0x79.instrumentation.exception.identifier.method.MultipleMethodsIdentifiedException;
 import pr0x79.instrumentation.identification.IClassIdentifier;
@@ -125,45 +130,50 @@ public class BytecodeInstrumentation {
 		if(accessor != null) {
 			List<LocalVarData> fieldRequiringLocalVars = new ArrayList<>();
 			for(MethodInterceptorData interceptor : accessor.getMethodInterceptors()) {
-				if(!interceptor.isReturn()) {
-					for(MethodNode method : clsNode.methods) {
-						if(interceptor.getInterceptorMethod().equals(method.name) && interceptor.getInterceptorMethodDesc().equals(method.desc)) {
-							List<LocalVarData> methodLocalVars = interceptor.getLocalVars();
-							Type[] params = Type.getArgumentTypes(method.desc);
-							if(params.length > 0) {
-								Map<AbstractInsnNode, InsnList> insertionPoints = new HashMap<>();
-								Iterator<AbstractInsnNode> insnIT = method.instructions.iterator();
-								while(insnIT.hasNext()) {
-									AbstractInsnNode node = insnIT.next();
-									if(node.getOpcode() == Opcodes.RETURN ||
-											node.getOpcode() == Opcodes.ARETURN ||
-											node.getOpcode() == Opcodes.DRETURN ||
-											node.getOpcode() == Opcodes.FRETURN ||
-											node.getOpcode() == Opcodes.IRETURN ||
-											node.getOpcode() == Opcodes.LRETURN ||
-											node.getOpcode() == Opcodes.ATHROW) {
-										InsnList insertions = new InsnList();
-										int stackIndex = 1;
-										for(int i = 0; i < params.length; i++) {
-											LocalVarData localVar = methodLocalVars.get(i);
+				for(MethodNode method : clsNode.methods) {
+					if(interceptor.getInterceptorMethod().equals(method.name) && interceptor.getInterceptorMethodDesc().equals(method.desc)) {
+						List<LocalVarData> methodLocalVars = interceptor.getLocalVars();
+						Type[] params = Type.getArgumentTypes(method.desc);
+						if(params.length > 0) {
+							Map<AbstractInsnNode, InsnList> insertionPoints = new HashMap<>();
+							Iterator<AbstractInsnNode> insnIT = method.instructions.iterator();
+							while(insnIT.hasNext()) {
+								AbstractInsnNode node = insnIT.next();
+								if(node.getOpcode() == Opcodes.RETURN ||
+										node.getOpcode() == Opcodes.ARETURN ||
+										node.getOpcode() == Opcodes.DRETURN ||
+										node.getOpcode() == Opcodes.FRETURN ||
+										node.getOpcode() == Opcodes.IRETURN ||
+										node.getOpcode() == Opcodes.LRETURN ||
+										node.getOpcode() == Opcodes.ATHROW) {
+									InsnList insertions = new InsnList();
+									int stackIndex = 1;
+									int localVarIndex = 0;
+									for(int i = 0; i < params.length; i++) {
+										//TODO Set context local variables
+										if(!params[i].getInternalName().equals(Type.getInternalName(IInterceptorContext.class))) {
+											LocalVarData localVar = methodLocalVars.get(localVarIndex);
 											Type varType = Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()];
 											insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
 											insertions.add(new VarInsnNode(varType.getOpcode(Opcodes.ILOAD), stackIndex));
 											insertions.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, clsNode.name, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, varType), true));
 											stackIndex += varType.getSize();
+											localVarIndex++;
 										}
+									}
+									if(insertions.size() > 0) {
 										insertionPoints.put(node, insertions);
 									}
 								}
-								for(Entry<AbstractInsnNode, InsnList> insertion : insertionPoints.entrySet()) {
-									method.instructions.insertBefore(insertion.getKey(), insertion.getValue());
-								}
+							}
+							for(Entry<AbstractInsnNode, InsnList> insertion : insertionPoints.entrySet()) {
+								method.instructions.insertBefore(insertion.getKey(), insertion.getValue());
 							}
 						}
 					}
-
-					fieldRequiringLocalVars.addAll(interceptor.getLocalVars());
 				}
+
+				fieldRequiringLocalVars.addAll(interceptor.getLocalVars());
 			}
 
 			for(LocalVarData localVar : fieldRequiringLocalVars) {
@@ -183,7 +193,8 @@ public class BytecodeInstrumentation {
 	}
 
 	/**
-	 * Gets the specified value of an {@link AnnotationNode}
+	 * Gets the specified value of an {@link AnnotationNode}.
+	 * <p><b>Note: Annotation arrays are returned as ArrayList</b>
 	 * @param annotations
 	 * @param annotation
 	 * @param name
@@ -206,7 +217,8 @@ public class BytecodeInstrumentation {
 	}
 
 	/**
-	 * Gets the specified value of an {@link AnnotationNode}
+	 * Gets the specified value of an {@link AnnotationNode}.
+	 * <p><b>Note: Annotation arrays are returned as ArrayList</b>
 	 * @param annotation
 	 * @param name
 	 * @param type
@@ -214,7 +226,7 @@ public class BytecodeInstrumentation {
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T> T getAnnotationValue(AnnotationNode annotation, String name, Class<T> type) {
-		for(int i = 0; i < annotation.values.size() / 2 + 1; i += 2) {
+		for(int i = 0; i < annotation.values.size(); i += 2) {
 			if(name.equals(((String) annotation.values.get(i))) && annotation.values.get(i + 1) != null && type.isAssignableFrom(annotation.values.get(i + 1).getClass())) {
 				return (T) annotation.values.get(i + 1);
 			}
@@ -575,34 +587,33 @@ public class BytecodeInstrumentation {
 			}
 		}
 
+		//TODO Use context
 		//Implement setters and getters for LocalVars
 		for(MethodInterceptorData interceptor : classInterceptors) {
-			if(!interceptor.isReturn()) {
-				for(LocalVarData localVar : interceptor.getLocalVars()) {
-					Set<String> takenFieldNames = new HashSet<>();
-					for(FieldNode field : clsNode.fields) {
-						takenFieldNames.add(field.name);
-					}
-					String generatedField = getUniqueName(takenFieldNames);
-					Type fieldType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[localVar.getParameterIndex()];
-
-					clsNode.visitField(Opcodes.ACC_PRIVATE, generatedField, fieldType.getDescriptor(), null, null);
-
-					//Setter
-					MethodVisitor mvSetter = clsNode.visitMethod(Opcodes.ACC_PUBLIC, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
-					mvSetter.visitVarInsn(Opcodes.ALOAD, 0);
-					mvSetter.visitVarInsn(fieldType.getOpcode(Opcodes.ILOAD), 1);
-					mvSetter.visitFieldInsn(Opcodes.PUTFIELD, clsNode.name, generatedField, fieldType.getDescriptor());
-					mvSetter.visitInsn(Opcodes.RETURN);
-					mvSetter.visitEnd();
-
-					//Getter
-					MethodVisitor mvGetter = clsNode.visitMethod(Opcodes.ACC_PUBLIC, localVar.getGeneratedGetterMethod(), Type.getMethodDescriptor(Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
-					mvGetter.visitVarInsn(Opcodes.ALOAD, 0);
-					mvGetter.visitFieldInsn(Opcodes.GETFIELD, clsNode.name, generatedField, fieldType.getDescriptor());
-					mvGetter.visitInsn(fieldType.getOpcode(Opcodes.IRETURN));
-					mvGetter.visitEnd();
+			for(LocalVarData localVar : interceptor.getLocalVars()) {
+				Set<String> takenFieldNames = new HashSet<>();
+				for(FieldNode field : clsNode.fields) {
+					takenFieldNames.add(field.name);
 				}
+				String generatedField = getUniqueName(takenFieldNames);
+				Type fieldType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[localVar.getParameterIndex()];
+
+				clsNode.visitField(Opcodes.ACC_PRIVATE, generatedField, fieldType.getDescriptor(), null, null);
+
+				//Setter
+				MethodVisitor mvSetter = clsNode.visitMethod(Opcodes.ACC_PUBLIC, localVar.getGeneratedSetterMethod(), Type.getMethodDescriptor(Type.VOID_TYPE, Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
+				mvSetter.visitVarInsn(Opcodes.ALOAD, 0);
+				mvSetter.visitVarInsn(fieldType.getOpcode(Opcodes.ILOAD), 1);
+				mvSetter.visitFieldInsn(Opcodes.PUTFIELD, clsNode.name, generatedField, fieldType.getDescriptor());
+				mvSetter.visitInsn(Opcodes.RETURN);
+				mvSetter.visitEnd();
+
+				//Getter
+				MethodVisitor mvGetter = clsNode.visitMethod(Opcodes.ACC_PUBLIC, localVar.getGeneratedGetterMethod(), Type.getMethodDescriptor(Type.getArgumentTypes(localVar.getInterceptorMethodDesc())[localVar.getParameterIndex()]), null, null);
+				mvGetter.visitVarInsn(Opcodes.ALOAD, 0);
+				mvGetter.visitFieldInsn(Opcodes.GETFIELD, clsNode.name, generatedField, fieldType.getDescriptor());
+				mvGetter.visitInsn(fieldType.getOpcode(Opcodes.IRETURN));
+				mvGetter.visitEnd();
 			}
 		}
 
@@ -632,24 +643,22 @@ public class BytecodeInstrumentation {
 				throw new InstructionOutOfBoundsException(String.format("Instruction index of %s#%s:%s is out of bounds. Current: %s, Expected: [%d, %d]", interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), interceptor.getInstructionIdentifierId(), instructionIndex, 0, targetMethod.instructions.size() - 1), null, instructionIndex, 0, targetMethod.instructions.size() - 1, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getInstructionIdentifierId(), interceptor.getInstructionIdentifier());
 			}
 
-			int jumpInstructionIndex = -1;
-			if(interceptor.getJumpInstructionIdentifier() != null) {
-				if(Type.getReturnType(interceptor.getInterceptorMethodDesc()) != Type.BOOLEAN_TYPE) {
-					throw new InvalidReturnTypeException(String.format("Return type of method interceptor %s#%s with instruction jump is not boolean", clsNode.name, targetMethod.name + targetMethod.desc), null, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), boolean.class.getName(), Type.getReturnType(interceptor.getInterceptorMethodDesc()).getClassName());
+			AbstractInsnNode[] exitNodes = new AbstractInsnNode[interceptor.getExitInstructionIdentifiers().length];
+			for(int i = 0; i < interceptor.getExitInstructionIdentifiers().length; i++) {
+				int exitInstructionIndex = interceptor.getExitInstructionIdentifiers()[i].identify(targetMethod);
+				if(exitInstructionIndex == -1) {
+					throw new JumpInstructionNotFoundException(clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getExitInstructionIdentifierIds()[i], interceptor.getExitInstructionIdentifiers()[i]);
 				}
-				jumpInstructionIndex = interceptor.getJumpInstructionIdentifier().identify(targetMethod);
-				if(jumpInstructionIndex == -1) {
-					throw new JumpInstructionNotFoundException(clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getJumpInstructionIdentifierId(), interceptor.getJumpInstructionIdentifier());
+				if(exitInstructionIndex < 0 || exitInstructionIndex >= targetMethod.instructions.size()) {
+					throw new InstructionOutOfBoundsException(String.format("Exit instruction index of %s#%s:%s is out of bounds. Current: %s, Expected: [%d, %d]", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getExitInstructionIdentifierIds()[i], exitInstructionIndex, 0, targetMethod.instructions.size() - 1), null, exitInstructionIndex, 0, targetMethod.instructions.size() - 1, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getExitInstructionIdentifierIds()[i], interceptor.getExitInstructionIdentifiers()[i]);
 				}
-				if(jumpInstructionIndex < 0 || jumpInstructionIndex >= targetMethod.instructions.size()) {
-					throw new InstructionOutOfBoundsException(String.format("Instruction jump index of %s#%s:%s is out of bounds. Current: %s, Expected: [%d, %d]", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getJumpInstructionIdentifierId(), jumpInstructionIndex, 0, targetMethod.instructions.size() - 1), null, jumpInstructionIndex, 0, targetMethod.instructions.size() - 1, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getJumpInstructionIdentifierId(), interceptor.getJumpInstructionIdentifier());
+				if(exitInstructionIndex <= instructionIndex) {
+					throw new InstructionOutOfBoundsException(String.format("Exit instruction index of %s#%s:%s must be after the interceptor instruction index. Current: %s, Expected: >%d", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getExitInstructionIdentifierIds()[i], exitInstructionIndex, instructionIndex), null, exitInstructionIndex, instructionIndex + 1, targetMethod.instructions.size() - 1, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getExitInstructionIdentifierIds()[i], interceptor.getExitInstructionIdentifiers()[i]);
 				}
-				if(jumpInstructionIndex <= instructionIndex) {
-					throw new InstructionOutOfBoundsException(String.format("Instruction jump index of %s#%s:%s must be after the interceptor instruction index. Current: %s, Expected: >%d", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getJumpInstructionIdentifierId(), jumpInstructionIndex, instructionIndex), null, jumpInstructionIndex, instructionIndex + 1, targetMethod.instructions.size() - 1, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getJumpInstructionIdentifierId(), interceptor.getJumpInstructionIdentifier());
-				}
+				exitNodes[i] = targetMethod.instructions.get(exitInstructionIndex);
 			}
 
-			interceptorInsertions.put(interceptor, new Object[]{targetMethod, targetMethod.instructions.get(instructionIndex), jumpInstructionIndex == -1 ? null : targetMethod.instructions.get(jumpInstructionIndex)});
+			interceptorInsertions.put(interceptor, new Object[]{targetMethod, targetMethod.instructions.get(instructionIndex), exitNodes});
 		}
 
 		//Insert instructions for the interceptors at the insertion node
@@ -657,108 +666,222 @@ public class BytecodeInstrumentation {
 			MethodInterceptorData interceptor = interceptorInsertion.getKey();
 			MethodNode targetMethod = (MethodNode) interceptorInsertion.getValue()[0];
 			AbstractInsnNode insertionNode = (AbstractInsnNode) interceptorInsertion.getValue()[1];
-			AbstractInsnNode jumpNode = (AbstractInsnNode) interceptorInsertion.getValue()[2];
+			AbstractInsnNode[] exitNodes = (AbstractInsnNode[]) interceptorInsertion.getValue()[2];
 
 			InsnList insertions = new InsnList();
 
-			insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+			LabelNode interceptionScopeStart = new LabelNode();
+			LabelNode interceptionScopeEnd = new LabelNode();
 
-			//Load local variables
-			for(LocalVarData importData : interceptor.getLocalVars()) {
-				int importLocalVariableIndex = importData.getInstructionIdentifier().identify(targetMethod);
-				LocalVariableNode importLocalVariable = null;
-				for(LocalVariableNode localVar : targetMethod.localVariables) {
-					if(localVar.index == importLocalVariableIndex) {
-						importLocalVariable = localVar;
+			String returnSig = null;
+			if(targetMethod.signature != null) {
+				ReturnTypeSignatureMapper mapper = new ReturnTypeSignatureMapper(Opcodes.ASM5);
+				new SignatureReader(targetMethod.signature).accept(mapper);
+				returnSig = mapper.getSignature();
+			}
+
+			System.out.println("RET SIG: " + returnSig);
+			System.out.println("CONT SIG: " + interceptor.getContextSignature());
+			
+			Type contextReturnType;
+			Map<Integer, Type> contextSigTypes = new HashMap<>();
+			if(interceptor.getContextSignature() != null) {
+				SignatureTypesMapper contextSigTypesMapper = new SignatureTypesMapper(Opcodes.ASM5, contextSigTypes, Integer.MAX_VALUE);
+				new SignatureReader(interceptor.getContextSignature()).accept(contextSigTypesMapper);
+				contextReturnType = contextSigTypes.get(0);
+				System.out.println("SIGS: " + contextSigTypes);
+			} else {
+				contextReturnType = Type.VOID_TYPE;
+			}
+			
+			System.out.println("RET TYPE: " + contextReturnType + " " + Type.VOID_TYPE.getSort());
+			
+			//TODO Verify context sig
+			if((returnSig == null) != (interceptor.getContextSignature() == null)) {
+				throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
+			}
+			if(returnSig != null && interceptor.getContextSignature() != null) {
+				Map<Integer, Type> returnSigTypes = new HashMap<>();
+				SignatureTypesMapper returnSigTypesMapper = new SignatureTypesMapper(Opcodes.ASM5, returnSigTypes, Integer.MAX_VALUE);
+				new SignatureReader(returnSig).accept(returnSigTypesMapper);
+
+				if(returnSigTypes.size() != contextSigTypes.size()) {
+					throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
+				}
+				for(Entry<Integer, Type> returnSigTypeEntry : returnSigTypes.entrySet()) {
+					Type contextSigType = contextSigTypes.get(returnSigTypeEntry.getKey());
+					if(!this.isTypeInstanceof(returnSigTypeEntry.getValue(), contextSigType)) {
+						throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
 					}
 				}
-				if(importLocalVariable == null) {
-					throw new ImportInstructionNotFoundException(importData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getInstructionIdentifierId(), importData.getInstructionIdentifier());
+			}
+
+			LocalVariableNode contextVarNode = this.generateLocalVariable(Type.getDescriptor(IInterceptorContext.class), interceptor.getContextSignature(), interceptionScopeStart, interceptionScopeEnd, targetMethod);
+
+			insertions.add(interceptionScopeStart);
+
+			insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+
+			//TODO Use context
+			//Load local variables
+			int localVarParamIndex = 0;
+			for(int i = 0; i < interceptor.getLocalVars().size() + 1; i++) {
+				if(i == interceptor.getContextParameter()) {
+					//Create context parameter
+					insertions.add(new LdcInsnNode(interceptor.getLocalVars().size())); //TODO Optimize index with BIPUSH, SIPUSH etc.
+					Method createContextMethod = getInternalMethod(MethodInterceptorData.class, "create_interceptor_context");
+					insertions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(MethodInterceptorData.class), createContextMethod.getName(), Type.getMethodDescriptor(createContextMethod), false));
+					insertions.add(new InsnNode(Opcodes.DUP));
+					//TODO Checkcast?
+					insertions.add(new VarInsnNode(Opcodes.ASTORE, contextVarNode.index));
+				} else {
+					LocalVarData localVarData = interceptor.getLocalVars().get(localVarParamIndex);
+					int identifiedLocalVarIndex = localVarData.getInstructionIdentifier().identify(targetMethod);
+					LocalVariableNode localVariable = null;
+					for(LocalVariableNode targetLocalVar : targetMethod.localVariables) {
+						if(targetLocalVar.index == identifiedLocalVarIndex) {
+							localVariable = targetLocalVar;
+						}
+					}
+					if(localVariable == null) {
+						throw new LocalVarInstructionNotFoundException(localVarData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), localVarData.getInstructionIdentifierId(), localVarData.getInstructionIdentifier());
+					}
+					Type localVarType = Type.getType(localVariable.desc);
+					Type paramType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[localVarData.getParameterIndex()];
+					ClassAccessorData paramAsAccessor = this.accessors.getAccessorByClassName(paramType.getClassName());
+					if((paramAsAccessor != null && !this.isTypeInstanceof(localVarType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !paramType.equals(localVarType))) {
+						throw new InvalidParameterTypeException(String.format("@LocalVar parameter %d of method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class. Local variable index: %d. Local variable identifier: %s", localVarData.getParameterIndex(), interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), paramType.getClassName(), Type.getType(localVariable.desc).getClassName(), localVariable.index, localVarData.getInstructionIdentifierId()), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), localVarData.getParameterIndex(), paramType.getClassName(), Type.getType(localVariable.desc).getClassName());
+					}
+					insertions.add(new VarInsnNode(paramType.getOpcode(Opcodes.ILOAD), localVariable.index));
+					localVarParamIndex++;
 				}
-				Type localVarType = Type.getType(importLocalVariable.desc);
-				Type paramType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[importData.getParameterIndex()];
-				ClassAccessorData paramAsAccessor = this.accessors.getAccessorByClassName(paramType.getClassName());
-				if((paramAsAccessor != null && !this.isTypeInstanceof(localVarType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !paramType.equals(localVarType))) {
-					throw new InvalidParameterTypeException(String.format("Import parameter %d of method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class. Local variable index: %d. Local variable identifier: %s", importData.getParameterIndex(), interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), paramType.getClassName(), Type.getType(importLocalVariable.desc).getClassName(), importLocalVariable.index, importData.getInstructionIdentifierId()), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getParameterIndex(), paramType.getClassName(), Type.getType(importLocalVariable.desc).getClassName());
-				}
-				insertions.add(new VarInsnNode(paramType.getOpcode(Opcodes.ILOAD), importLocalVariable.index));
 			}
 
 			//Call interceptor method
 			insertions.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, interceptor.getAccessorClass().replace('.', '/'), interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc(), true));
 
-			if(interceptor.isReturn()) {
+			insertions.add(new VarInsnNode(Opcodes.ALOAD, contextVarNode.index));
+			Method getReturnMethod = getInternalMethod(IInterceptorContext.class, "get_return");
+			insertions.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, Type.getInternalName(IInterceptorContext.class), getReturnMethod.getName(), Type.getMethodDescriptor(getReturnMethod), true));
+			insertions.add(new InsnNode(Opcodes.DUP));
+			Method checkReturnMethod = getInternalMethod(MethodInterceptorData.class, "check_return");
+			insertions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(MethodInterceptorData.class), checkReturnMethod.getName(), Type.getMethodDescriptor(checkReturnMethod), false));
+			LabelNode skipReturnTarget = new LabelNode();
+			insertions.add(new JumpInsnNode(Opcodes.IFEQ, skipReturnTarget));
+			if(Type.getReturnType(targetMethod.desc).getSort() == Type.OBJECT) {
+				insertions.add(new TypeInsnNode(Opcodes.CHECKCAST, Type.getReturnType(targetMethod.desc).getDescriptor()));
+			}
+			insertions.add(new InsnNode(Type.getReturnType(targetMethod.desc).getOpcode(Opcodes.IRETURN)));
+			insertions.add(skipReturnTarget);
+			insertions.add(new InsnNode(Opcodes.POP));
+
+			/*if(interceptor.isReturn()) {
 				//Add return instruction
 				Type returnType = Type.getReturnType(targetMethod.desc);
 				Type interceptorReturnType = Type.getReturnType(interceptor.getInterceptorMethodDesc());
 				ClassAccessorData paramAsAccessor = this.accessors.getAccessorByClassName(interceptorReturnType.getClassName());
 				if((paramAsAccessor != null && !this.isTypeInstanceof(returnType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !returnType.equals(interceptorReturnType))) {
-					throw new InvalidReturnTypeException(String.format("Return type of method interceptor for method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class", interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), interceptorReturnType.getClassName(), returnType.getClassName()), null, interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), interceptorReturnType.getClassName(), returnType.getClassName());
+					//throw new InvalidReturnTypeException(String.format("Return type of method interceptor for method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class", interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), interceptorReturnType.getClassName(), returnType.getClassName()), null, interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), interceptorReturnType.getClassName(), returnType.getClassName());
 				}
 				if(paramAsAccessor != null) {
 					//Interceptor return type is an accessor, cast to the intercepted method return type
 					insertions.add(new TypeInsnNode(Opcodes.CHECKCAST, returnType.getDescriptor()));
 				}
 				insertions.add(new InsnNode(returnType.getOpcode(Opcodes.IRETURN)));
-			} else {
-				//Store local variables
-				for(LocalVarData importData : interceptor.getLocalVars()) {
-					int importLocalVariableIndex = importData.getInstructionIdentifier().identify(targetMethod);
-					LocalVariableNode importLocalVariable = null;
-					for(LocalVariableNode localVar : targetMethod.localVariables) {
-						if(localVar.index == importLocalVariableIndex) {
-							importLocalVariable = localVar;
-						}
+			} else {*/
+			//TODO Use context
+			//Store local variables
+			for(LocalVarData localVarData : interceptor.getLocalVars()) {
+				int localVarIndex = localVarData.getInstructionIdentifier().identify(targetMethod);
+				LocalVariableNode localVar = null;
+				for(LocalVariableNode targetLocalVar : targetMethod.localVariables) {
+					if(targetLocalVar.index == localVarIndex) {
+						localVar = targetLocalVar;
 					}
-					if(importLocalVariable == null) {
-						throw new ImportInstructionNotFoundException(importData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), importData.getInstructionIdentifierId(), importData.getInstructionIdentifier());
-					}
-					Type localVarType = Type.getType(importLocalVariable.desc);
-					Type paramType = Type.getArgumentTypes(importData.getInterceptorMethodDesc())[importData.getParameterIndex()];
-					insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
-					insertions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, clsNode.name, importData.getGeneratedGetterMethod(), Type.getMethodDescriptor(paramType), false));
-					if(!paramType.equals(localVarType)) {
-						//Parameter type is an accessor, cast to the local variable type
-						insertions.add(new TypeInsnNode(Opcodes.CHECKCAST, localVarType.getInternalName()));
-					}
-					insertions.add(new VarInsnNode(paramType.getOpcode(Opcodes.ISTORE), importLocalVariable.index));
 				}
+				if(localVar == null) {
+					throw new LocalVarInstructionNotFoundException(localVarData.getParameterIndex(), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), localVarData.getInstructionIdentifierId(), localVarData.getInstructionIdentifier());
+				}
+				Type localVarType = Type.getType(localVar.desc);
+				Type paramType = Type.getArgumentTypes(localVarData.getInterceptorMethodDesc())[localVarData.getParameterIndex()];
+				insertions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+				insertions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, clsNode.name, localVarData.getGeneratedGetterMethod(), Type.getMethodDescriptor(paramType), false));
+				if(!paramType.equals(localVarType)) {
+					//Parameter type is an accessor, cast to the local variable type
+					insertions.add(new TypeInsnNode(Opcodes.CHECKCAST, localVarType.getInternalName()));
+				}
+				insertions.add(new VarInsnNode(paramType.getOpcode(Opcodes.ISTORE), localVar.index));
+			}
 
-				if(jumpNode != null) {
-					LabelNode jumpTarget = new LabelNode();
+			if(exitNodes.length != 0) {
+				LabelNode[] exitTargets = new LabelNode[exitNodes.length];
+				for(int i = 0; i < exitNodes.length; i++) {
+					AbstractInsnNode exitNode = exitNodes[i];
+					LabelNode exitTarget = new LabelNode();
 
-					int jumpNodeIndex = targetMethod.instructions.indexOf(jumpNode);
+					int exitNodeIndex = targetMethod.instructions.indexOf(exitNode);
 
 					Analyzer<BasicValue> a = new Analyzer<>(new BasicInterpreter());
 					try {
 						Frame<BasicValue>[] frames = a.analyze(clsNode.name, targetMethod);
-						Frame<BasicValue> stackFrame = frames[jumpNodeIndex];
+						Frame<BasicValue> stackFrame = frames[exitNodeIndex];
 						if(stackFrame.getStackSize() > 0) {
 							StringBuilder stackStr = new StringBuilder();
 							stackStr.append("[");
-							for(int i = 0; i < stackFrame.getStackSize(); i++) {
-								stackStr.append(stackFrame.getStack(i).getType().getClassName());
-								if(i != stackFrame.getStackSize() - 1) {
+							for(int s = 0; s < stackFrame.getStackSize(); s++) {
+								stackStr.append(stackFrame.getStack(s).getType().getClassName());
+								if(s != stackFrame.getStackSize() - 1) {
 									stackStr.append(", ");
 								}
 							}
 							stackStr.append("]");
-							throw new InvalidJumpTargetException(String.format("Cannot insert jump target of %s#%s:%s at index %d. Stack must be empty. Current stack: %s", clsNode.name, targetMethod.name + targetMethod.desc, interceptorInsertion.getKey().getJumpInstructionIdentifierId(), jumpNodeIndex, stackStr.toString()), jumpNodeIndex, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptorInsertion.getKey().getJumpInstructionIdentifierId(), interceptorInsertion.getKey().getJumpInstructionIdentifier());
+							throw new InvalidJumpTargetException(String.format("Cannot insert exit target of %s#%s:%s at index %d. Stack must be empty. Current stack: %s", clsNode.name, targetMethod.name + targetMethod.desc, interceptorInsertion.getKey().getExitInstructionIdentifierIds()[i], exitNodeIndex, stackStr.toString()), exitNodeIndex, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptorInsertion.getKey().getExitInstructionIdentifierIds()[i], interceptorInsertion.getKey().getExitInstructionIdentifiers()[i]);
 						}
 					} catch (AnalyzerException ex) {
-						throw new InvalidJumpTargetException(String.format("Cannot insert jump target of %s#%s:%s at index %d due to an unknown reason", clsNode.name, targetMethod.name + targetMethod.desc, interceptorInsertion.getKey().getJumpInstructionIdentifierId(), jumpNodeIndex), ex, jumpNodeIndex, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptorInsertion.getKey().getJumpInstructionIdentifierId(), interceptorInsertion.getKey().getJumpInstructionIdentifier());
+						throw new InvalidJumpTargetException(String.format("Cannot insert exit target of %s#%s:%s at index %d due to an unknown reason", clsNode.name, targetMethod.name + targetMethod.desc, interceptorInsertion.getKey().getExitInstructionIdentifierIds()[i], exitNodeIndex), ex, exitNodeIndex, clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptorInsertion.getKey().getExitInstructionIdentifierIds()[i], interceptorInsertion.getKey().getExitInstructionIdentifiers()[i]);
 					}
 
 					//Insert jump target
-					targetMethod.instructions.insertBefore(jumpNode, jumpTarget);
-
-					insertions.add(new JumpInsnNode(Opcodes.IFNE, jumpTarget));
+					targetMethod.instructions.insertBefore(exitNode, exitTarget);
+					
+					exitTargets[i] = exitTarget;
 				}
+
+				//TODO Jump instructions
+				//insertions.add(new JumpInsnNode(Opcodes.IFNE, jumpTarget));
 			}
+			//}
+
+			insertions.add(interceptionScopeEnd);
 
 			//Insert instructions
 			targetMethod.instructions.insertBefore(insertionNode, insertions);
 		}
+	}
+
+	private LocalVariableNode generateLocalVariable(String desc, String sig, LabelNode scopeStart, LabelNode scopeEnd, MethodNode owner) {
+		Set<String> methodLocalVarNames = new HashSet<>();
+		for(LocalVariableNode localVar : owner.localVariables) {
+			methodLocalVarNames.add(localVar.name);
+		}
+
+		String contextVarName = getUniqueName(methodLocalVarNames);
+		methodLocalVarNames.add(contextVarName);
+
+		int contextVarIndex = 1; //0 is always 'this'
+		loop: while(true) {
+			for(LocalVariableNode localVar : owner.localVariables) {
+				if(localVar.index == contextVarIndex) {
+					contextVarIndex++;
+					continue loop;
+				}
+			}
+			break;
+		}
+
+		LocalVariableNode variable = new LocalVariableNode(contextVarName, desc, sig, scopeStart, scopeEnd, contextVarIndex);
+		owner.localVariables.add(variable);
+		return variable;
 	}
 
 	/**
@@ -920,5 +1043,25 @@ public class BytecodeInstrumentation {
 			}
 		}
 		return false;
+	}
+
+	public static Method getInternalMethod(Class<?> cls, String id) {
+		for(Method method : cls.getDeclaredMethods()) {
+			Internal a = method.getAnnotation(Internal.class);
+			if(a != null && id.equals(a.id())) {
+				return method;
+			}
+		}
+		throw new RuntimeException(String.format("Internal method of class %s with id %s was not found", cls.getName(), id));
+	}
+
+	public static Field getInternalField(Class<?> cls, String id) {
+		for(Field field : cls.getDeclaredFields()) {
+			Internal a = field.getAnnotation(Internal.class);
+			if(a != null && id.equals(a.id())) {
+				return field;
+			}
+		}
+		throw new RuntimeException(String.format("Internal field of class %s with id %s was not found", cls.getName(), id));
 	}
 }

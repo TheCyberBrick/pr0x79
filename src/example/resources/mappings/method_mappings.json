@@ -8,7 +8,7 @@
 		"names": ["init"]
 	},
 	"SomeClass_print": {
-		"desc": ["(Ljava/lang/String;)V"],
+		"desc": ["(Ljava/lang/String;)Ljava/util/Map;"],
 		"names": ["print"]
 	}
 }

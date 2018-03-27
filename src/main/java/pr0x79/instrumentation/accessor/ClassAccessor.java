@@ -6,18 +6,19 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import pr0x79.instrumentation.Internal;
+
 /**
  * This annotation must be added to all {@link IAccessor}s
  */
 @Retention(RUNTIME)
 @Target(TYPE)
 public @interface ClassAccessor {
-	public static final String CLASS_IDENTIFIER = "classIdentifier";
-	
 	/**
 	 * The ID of the class identifier that is responsible
 	 * for identifying the class
 	 * @return
 	 */
+	@Internal(id = "class_identifier")
 	public String classIdentifier();
 }

@@ -112,7 +112,7 @@ public class Bootstrapper {
 					ClassNode clsNode = new ClassNode();
 					classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
 
-					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, ClassAccessor.CLASS_IDENTIFIER, String.class, null);
+					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
 
 					if(classIdentifier != null) {
 						addInternallyLoadedAccessor(loader, className.replace("/", "."));

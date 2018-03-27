@@ -21,7 +21,7 @@ import pr0x79.instrumentation.identification.Identifiers;
 /**
  * Registry for accessors
  */
-public class Accessors {
+public final class Accessors {
 	private final Bootstrapper bootstrapper;
 	private final Identifiers identifiers;
 	private final BytecodeInstrumentation instrumentor;
@@ -57,7 +57,7 @@ public class Accessors {
 			throw new InstrumentorException(String.format("Accessor %s is not an interface", className));
 		}
 
-		String classIdentifierId = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, ClassAccessor.CLASS_IDENTIFIER, String.class, null);
+		String classIdentifierId = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
 		if(classIdentifierId == null) {
 			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor annotation", className));
 		}

@@ -6,26 +6,32 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import pr0x79.instrumentation.Internal;
+
 /**
  * This annotation can be added to default methods in an {@link IAccessor}.
  * The parent {@link IAccessor} will generate the code for the invocation
- * of the proxied method. The return type of the method must be void, unless an
- * {@link InterceptorConditional} or {@link InterceptorReturn} annotation is used.
- * <p>
- * If the method is static, the interceptor method must also be static.
- * @see {@link InterceptorConditional}, {@link InterceptorReturn}, {@link LocalVar}
+ * of the proxied method. The return type of the method must be void, and
+ * it must have a {@link IInterceptorContext} parameter.
+ * @see {@link IAccessor}, {@link IInterceptorContext}, {@link LocalVar}
  */
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface Interceptor {
-	public static final String METHOD_IDENTIFIER = "methodIdentifier";
-	public static final String INSTRUCTION_IDENTIFIER = "instructionIdentifier";
-
+	/**
+	 * The IDs of the instruction identifiers that are responsible
+	 * for identifying the exit instructions used by {@link IInterceptorContext#exitAt(int)}
+	 * @return
+	 */
+	@Internal(id = "exit_instruction_identifiers")
+	public String[] exitInstructionIdentifiers() default {};
+	
 	/**
 	 * The ID of the method identifier that is responsible
 	 * for identifying the method
 	 * @return
 	 */
+	@Internal(id = "method_identifier")
 	public String methodIdentifier();
 
 	/**
@@ -33,5 +39,6 @@ public @interface Interceptor {
 	 * for identifying the instruction where the interceptor is injected
 	 * @return
 	 */
+	@Internal(id = "instruction_identifier")
 	public String instructionIdentifier();
 }

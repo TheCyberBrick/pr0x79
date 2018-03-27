@@ -6,6 +6,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
+import pr0x79.instrumentation.Internal;
 import pr0x79.instrumentation.identification.IFieldIdentifier;
 
 /**
@@ -27,12 +28,11 @@ import pr0x79.instrumentation.identification.IFieldIdentifier;
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface FieldAccessor {
-	public static final String FIELD_IDENTIFIER = "fieldIdentifier";
-	
 	/**
 	 * The ID of the field identifier that is responsible
 	 * for identifying the field
 	 * @return
 	 */
+	@Internal(id = "field_identifier")
 	public String fieldIdentifier();
 }

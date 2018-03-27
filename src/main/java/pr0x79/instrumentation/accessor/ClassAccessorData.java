@@ -3,17 +3,24 @@ package pr0x79.instrumentation.accessor;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.signature.SignatureReader;
+import org.objectweb.asm.signature.SignatureVisitor;
+import org.objectweb.asm.signature.SignatureWriter;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import pr0x79.instrumentation.BytecodeInstrumentation;
+import pr0x79.instrumentation.MethodParameterSignaturesMapper;
+import pr0x79.instrumentation.SignatureRewriter;
 import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodModifierException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidReturnTypeException;
@@ -27,7 +34,7 @@ import pr0x79.instrumentation.identification.Identifiers;
  * Stores the data for a registered class accessor and its
  * field and method accessors and field generators
  */
-public class ClassAccessorData {
+public final class ClassAccessorData {
 	private final String identifierId;
 	private final String accessorClass;
 	private final IClassIdentifier classIdentifier;
@@ -36,7 +43,7 @@ public class ClassAccessorData {
 	private final List<FieldGeneratorData> fieldGenerators = new ArrayList<>();
 	private final List<MethodInterceptorData> methodInterceptors = new ArrayList<>();
 
-	public ClassAccessorData(String identifierId, Identifiers identifiers, String accessorClass, ClassNode clsNode, IClassIdentifier classIdentifier, BytecodeInstrumentation instrumentor) {
+	ClassAccessorData(String identifierId, Identifiers identifiers, String accessorClass, ClassNode clsNode, IClassIdentifier classIdentifier, BytecodeInstrumentation instrumentor) {
 		this.identifierId = identifierId;
 		this.accessorClass = accessorClass;
 		this.classIdentifier = classIdentifier;
@@ -67,7 +74,7 @@ public class ClassAccessorData {
 	 * @return
 	 */
 	private boolean identifyMethodAccessor(MethodNode method, Identifiers identifiers) {
-		String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, MethodAccessor.METHOD_IDENTIFIER, String.class, null);
+		String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, BytecodeInstrumentation.getInternalMethod(MethodAccessor.class, "method_identifier").getName(), String.class, null);
 		if(methodIdentifierId != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Method accessor %s#%s is a default method", accessorClass, method.name + method.desc));
@@ -93,63 +100,101 @@ public class ClassAccessorData {
 	 */
 	private boolean identifyMethodInterceptor(MethodNode method, Identifiers identifiers, Set<String> takenMethodNames, String className, String classIdentifierId) {
 		AnnotationNode interceptorAnnotation = null;
-		AnnotationNode instructionJumpAnnotation = null;
-		AnnotationNode returnAnnotation = null;
 
 		if(method.visibleAnnotations != null) {
 			for(AnnotationNode annotation : method.visibleAnnotations) {
 				if(annotation.desc.equals(Type.getDescriptor(Interceptor.class))) {
 					interceptorAnnotation = annotation;
 				}
-				if(annotation.desc.equals(Type.getDescriptor(InterceptorConditional.class))) {
-					instructionJumpAnnotation = annotation;
-				}
-				if(annotation.desc.equals(Type.getDescriptor(InterceptorReturn.class))) {
-					returnAnnotation = annotation;
-				}
 			}
 		}
 
 		if(interceptorAnnotation != null) {
-			if(instructionJumpAnnotation != null && returnAnnotation != null) {
-				throw new InstrumentorException(String.format("Method interceptor %s#%s has both the instruction jump annotation and a return annotation", className, method.name + method.desc));
-			}
-
-			if(instructionJumpAnnotation == null) {
-				if(returnAnnotation == null && Type.getReturnType(method.desc).getSort() != Type.VOID) {
-					throw new InvalidReturnTypeException(String.format("Return type of method interceptor %s#%s is not void", className, method.name + method.desc), null, className, new MethodDescription(method.name, method.desc), void.class.getName(), Type.getReturnType(method.desc).getClassName());
-				}
-			} else {
-				if(Type.getReturnType(method.desc).getSort() != Type.BOOLEAN) {
-					throw new InvalidReturnTypeException(String.format("Return type of method interceptor %s#%s with instruction jump is not boolean", className, method.name + method.desc), null, className, new MethodDescription(method.name, method.desc), boolean.class.getName(), Type.getReturnType(method.desc).getClassName());
-				}
+			if(Type.getReturnType(method.desc).getSort() != Type.VOID) {
+				throw new InvalidReturnTypeException(String.format("Return type of method interceptor %s#%s is not void", className, method.name + method.desc), null, className, new MethodDescription(method.name, method.desc), void.class.getName(), Type.getReturnType(method.desc).getClassName());
 			}
 
 			if((method.access & Opcodes.ACC_STATIC) != 0) {
 				throw new InvalidMethodModifierException(String.format("Method interceptor %s#%s is a static method", className, method.name + method.desc), null, className, new MethodDescription(method.name, method.desc), Modifier.STATIC);
 			}
 
+			String contextSig = null;
+			int contextParam = -1;
 			List<LocalVarData> methodLocalVars = new ArrayList<>();
 			Type[] params = Type.getArgumentTypes(method.desc);
 			for(int i = 0; i < params.length; i++) {
-				AnnotationNode importAnnotation = null;
+				if(params[i].getClassName().equals(IInterceptorContext.class.getName())) {
+					if(contextParam >= 0) {
+						throw new InstrumentorException(String.format("Method interceptor %s#%s has multiple InterceptorContext parameters", className, method.name + method.desc));
+					}
+					contextParam = i;
+					
+					if(method.signature != null) {
+						Map<Integer, String> sigs = new HashMap<>();
+						MethodParameterSignaturesMapper mapper = new MethodParameterSignaturesMapper(Opcodes.ASM5);
+						
+						new SignatureReader(method.signature).accept(mapper);
+						mapper.fill(sigs);
+						String contextParamSig = sigs.get(contextParam);
+						
+						if(contextParamSig != null) {
+							final SignatureWriter contexSigWriter = new SignatureWriter();
+							SignatureRewriter rewriter = new SignatureRewriter(Opcodes.ASM5) {
+								private int depth = 0;
+								
+								@Override
+								public void visitInnerClassType(String name) {
+									if(!name.equals(Type.getInternalName(IInterceptorContext.class))) {
+										this.writer = contexSigWriter;
+									}
+									this.depth++;
+									super.visitInnerClassType(name);
+								}
+								
+								@Override
+								public void visitClassType(String name) {
+									if(!name.equals(Type.getInternalName(IInterceptorContext.class))) {
+										this.writer = contexSigWriter;
+									}
+									this.depth++;
+									super.visitClassType(name);
+								}
+								
+								@Override
+								public void visitEnd() {
+									this.depth--;
+									if(this.depth == 0) {
+										this.writer = null;
+									}
+									super.visitEnd();
+								}
+							};
+							new SignatureReader(contextParamSig).accept(rewriter);
+							
+							contextSig = contexSigWriter.toString();
+						}
+					}
+					
+					continue;
+				}
+				AnnotationNode localVarAnnotation = null;
 				if(method.visibleParameterAnnotations != null && i < method.visibleParameterAnnotations.length) {
 					List<AnnotationNode> paramAnnotations = method.visibleParameterAnnotations[i];
 					if(paramAnnotations != null) {
 						for(AnnotationNode annotation : paramAnnotations) {
 							if(annotation.desc.equals(Type.getDescriptor(LocalVar.class))) {
-								importAnnotation = annotation;
+								localVarAnnotation = annotation;
 								break;
 							}
 						}
 					}
 				}
-				if(importAnnotation == null) {
-					throw new InstrumentorException(String.format("Parameter %d for method interceptor %s#%s does not have an @Import annotation", i, className, method.name + method.desc));
+				if(localVarAnnotation == null) {
+					throw new InstrumentorException(String.format("Parameter %d for method interceptor %s#%s does not have an @LocalVar annotation", i, className, method.name + method.desc));
 				}
-				String instructionIdentifierId = BytecodeInstrumentation.getAnnotationValue(importAnnotation, LocalVar.INSTRUCTION_IDENTIFIER, String.class);
+				String instructionIdentifierId = BytecodeInstrumentation.getAnnotationValue(localVarAnnotation, BytecodeInstrumentation.getInternalMethod(LocalVar.class, "instruction_identifier").getName(), String.class);
 				if(instructionIdentifierId == null) {
-					throw new InstrumentorException(String.format("Import for parameter %d of method %s#%s has invalid arguments", i, className, method.name + method.desc));
+					throw new InstrumentorException(String.format("@LocalVar for parameter %d of method %s#%s has invalid arguments", i, className, method.name + method.desc));
 				}
 				String generatedSetterName = BytecodeInstrumentation.getUniqueName(takenMethodNames);
 				takenMethodNames.add(generatedSetterName);
@@ -159,17 +204,29 @@ public class ClassAccessorData {
 				methodLocalVars.add(localVar);
 			}
 
-			String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(interceptorAnnotation, Interceptor.METHOD_IDENTIFIER, String.class);
-			String instructionIdentifierId = BytecodeInstrumentation.getAnnotationValue(interceptorAnnotation, Interceptor.INSTRUCTION_IDENTIFIER, String.class);
-			String jumpInstructionIdentifierId = null;
-			if(instructionJumpAnnotation != null) {
-				jumpInstructionIdentifierId = BytecodeInstrumentation.getAnnotationValue(instructionJumpAnnotation, InterceptorConditional.INSTRUCTION_IDENTIFIER, String.class);
+			if(contextParam < 0) {
+				throw new InstrumentorException(String.format("Method interceptor %s#%s has no InterceptorContext parameter", className, method.name + method.desc));
 			}
-			if(methodIdentifierId == null || instructionIdentifierId == null || (jumpInstructionIdentifierId != null && instructionJumpAnnotation == null)) {
+
+			String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(interceptorAnnotation, BytecodeInstrumentation.getInternalMethod(Interceptor.class, "method_identifier").getName(), String.class);
+			String instructionIdentifierId = BytecodeInstrumentation.getAnnotationValue(interceptorAnnotation, BytecodeInstrumentation.getInternalMethod(Interceptor.class, "instruction_identifier").getName(), String.class);
+			List<?> exitInstructionIdentifierIdObjs = BytecodeInstrumentation.getAnnotationValue(interceptorAnnotation, BytecodeInstrumentation.getInternalMethod(Interceptor.class, "exit_instruction_identifiers").getName(), ArrayList.class);
+			String[] exitInstructionIdentifierIds = new String[exitInstructionIdentifierIdObjs == null ? 0 : exitInstructionIdentifierIdObjs.size()];
+			if(exitInstructionIdentifierIdObjs != null) {
+				for(int i = 0; i < exitInstructionIdentifierIdObjs.size(); i++) {
+					exitInstructionIdentifierIds[i] = (String) exitInstructionIdentifierIdObjs.get(i);
+				}
+			}
+			
+			if(methodIdentifierId == null || instructionIdentifierId == null || exitInstructionIdentifierIds == null) {
 				throw new InstrumentorException(String.format("Method interceptor for method %s#%s has invalid arguments", className, method.name + method.desc));
 			}
 
-			MethodInterceptorData methodInterceptor = new MethodInterceptorData(classIdentifierId, methodIdentifierId, instructionIdentifierId, jumpInstructionIdentifierId, Type.getObjectType(className).getClassName(), method.name, method.desc, methodLocalVars, returnAnnotation != null);
+			MethodInterceptorData methodInterceptor = new MethodInterceptorData(
+					classIdentifierId, methodIdentifierId, instructionIdentifierId, 
+					exitInstructionIdentifierIds, Type.getObjectType(className).getClassName(), 
+					method.name, method.desc, method.signature, methodLocalVars, contextParam,
+					contextSig);
 			methodInterceptor.initIdentifiers(identifiers);
 			this.methodInterceptors.add(methodInterceptor);
 
@@ -185,7 +242,7 @@ public class ClassAccessorData {
 	 * @return
 	 */
 	private boolean identifyFieldAccessor(MethodNode method, Identifiers identifiers) {
-		String fieldIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldAccessor.class, FieldAccessor.FIELD_IDENTIFIER, String.class, null);
+		String fieldIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldAccessor.class, BytecodeInstrumentation.getInternalMethod(FieldAccessor.class, "field_identifier").getName(), String.class, null);
 		if(fieldIdentifierId != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Field accessor %s#%s is a default method", accessorClass, method.name + method.desc));
@@ -225,7 +282,7 @@ public class ClassAccessorData {
 	 * @return
 	 */
 	private boolean identifyFieldGenerator(MethodNode method, Identifiers identifiers) {
-		String fieldGeneratorField = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldGenerator.class, FieldGenerator.FIELD_NAME, String.class, null);
+		String fieldGeneratorField = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldGenerator.class, BytecodeInstrumentation.getInternalMethod(FieldGenerator.class, "field_name").getName(), String.class, null);
 		if(fieldGeneratorField != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Field generator %s#%s is a default method", accessorClass, method.name + method.desc));

@@ -11,14 +11,14 @@
 	"before_init_print": {
 		"type": "instruction",
 		"identification": "method_call",
-		"desc": ["(Ljava/lang/String;)V"],
+		"desc": ["(Ljava/lang/String;)Ljava/util/Map;"],
 		"names": ["print"],
 		"owners": ["program/SomeClass"]
 	},
 	"after_init_print": {
 		"type": "instruction",
 		"identification": "method_call",
-		"desc": ["(Ljava/lang/String;)V"],
+		"desc": ["(Ljava/lang/String;)Ljava/util/Map;"],
 		"names": ["print"],
 		"owners": ["program/SomeClass"],
 		"before": false
