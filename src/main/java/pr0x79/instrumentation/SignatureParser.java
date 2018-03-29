@@ -1,127 +1,146 @@
 package pr0x79.instrumentation;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.signature.SignatureReader;
 import org.objectweb.asm.signature.SignatureVisitor;
 
 public class SignatureParser {
-	public static class Symbol {
-		final boolean isClass;
-		final String wildcard;
-		final Type type;
-		final List<Symbol> signature = new ArrayList<>();
-		
-		Symbol(Type type, String wildcard) {
+	public static class FormalSymbol { }
+
+	public static class FormalTypeSymbol extends FormalSymbol {
+		public final Type type;
+		public final boolean iface;
+		public final FormalSymbol[] signature;
+
+		private FormalTypeSymbol(Type type, boolean iface, FormalSymbol[] signature) {
 			this.type = type;
-			this.wildcard = wildcard;
-			this.isClass = type != null;
+			this.iface = iface;
+			this.signature = signature;
+			for(FormalSymbol symbol : signature) {
+				if(symbol instanceof FormalTypeSymbol == false && symbol instanceof FormalTypeParameterSymbol == false) {
+					throw new RuntimeException("Signature symbol " + symbol + " is neither a type nor a type variable");
+				}
+			}
 		}
 	}
+
+	public static class FormalTypeVariableSymbol extends FormalSymbol {
+		public final String name;
+
+		private FormalTypeVariableSymbol(String name) {
+			this.name = name;
+		}
+		
+		//TODO FormalTypeVariableSymbol will later be resolved to FormalTypeParameterSymbols
+	}
 	
-	public static List<Symbol> parse(String signature) {
-		List<Symbol> symbols = new ArrayList<>();
-		
-		SignatureVisitor visitor = new SignatureVisitor(Opcodes.ASM5) {
-			@Override
-			public void visitFormalTypeParameter(String name) {
-				// TODO Auto-generated method stub
-				super.visitFormalTypeParameter(name);
+	public static class FormalTypeParameterSymbol extends FormalSymbol {
+		public final String name;
+		public final FormalTypeSymbol extendsType;
+		public final FormalTypeSymbol[] implementsTypes;
+
+		private FormalTypeParameterSymbol(String name, FormalTypeSymbol extendsType, FormalTypeSymbol[] implementsTypes) {
+			this.name = name;
+			this.extendsType = extendsType;
+			this.implementsTypes = implementsTypes;
+			for(FormalTypeSymbol type : implementsTypes) {
+				if(!type.iface) {
+					throw new RuntimeException("Implements type " + type.type + " is not an interface");
+				}
 			}
-			
-			@Override
-			public SignatureVisitor visitClassBound() {
-				// TODO Auto-generated method stub
-				return super.visitClassBound();
-			}
-			
-			@Override
-			public SignatureVisitor visitArrayType() {
-				// TODO Auto-generated method stub
-				return super.visitArrayType();
-			}
-			
-			@Override
-			public SignatureVisitor visitExceptionType() {
-				// TODO Auto-generated method stub
-				return super.visitExceptionType();
-			}
-			
-			@Override
-			public SignatureVisitor visitInterface() {
-				// TODO Auto-generated method stub
-				return super.visitInterface();
-			}
-			
-			@Override
-			public SignatureVisitor visitInterfaceBound() {
-				// TODO Auto-generated method stub
-				return super.visitInterfaceBound();
-			}
-			
-			@Override
-			public SignatureVisitor visitParameterType() {
-				// TODO Auto-generated method stub
-				return super.visitParameterType();
-			}
-			
-			@Override
-			public SignatureVisitor visitReturnType() {
-				// TODO Auto-generated method stub
-				return super.visitReturnType();
-			}
-			
-			@Override
-			public SignatureVisitor visitSuperclass() {
-				// TODO Auto-generated method stub
-				return super.visitSuperclass();
-			}
-			
-			@Override
-			public SignatureVisitor visitTypeArgument(char wildcard) {
-				// TODO Auto-generated method stub
-				return super.visitTypeArgument(wildcard);
-			}
-			
-			@Override
-			public void visitBaseType(char descriptor) {
-				// TODO Auto-generated method stub
-				super.visitBaseType(descriptor);
-			}
-			
-			@Override
-			public void visitClassType(String name) {
-				// TODO Auto-generated method stub
-				super.visitClassType(name);
-			}
-			
-			@Override
-			public void visitEnd() {
-				// TODO Auto-generated method stub
-				super.visitEnd();
-			}
-			
-			@Override
-			public void visitInnerClassType(String name) {
-				// TODO Auto-generated method stub
-				super.visitInnerClassType(name);
-			}
-			
-			@Override
-			public void visitTypeArgument() {
-				// TODO Auto-generated method stub
-				super.visitTypeArgument();
-			}
-			
-			@Override
-			public void visitTypeVariable(String name) {
-				// TODO Auto-generated method stub
-				super.visitTypeVariable(name);
-			}
-		};
-		
+		}
+	}
+
+
+
+	public static List<FormalSymbol> parseFormalSignature(String signature) {
+		new SignatureReader(signature).accept(new FormalSignatureVisitor(Opcodes.ASM5));
+
 		return null;
+	}
+	
+	public static void parseMethodSignature(String methodSignature) {
+		
+	}
+
+	public static class FormalSignatureVisitor extends SignatureVisitor {
+
+		private static final int FORMAL = 1 << 1;
+
+		private static final int BOUND = 1 << 2;
+
+		private static final int BOUND_IFACE = 1 << 3;
+
+		private static final int STOP = 1 << 4;
+
+		private int state;
+
+		public FormalSignatureVisitor(int api) {
+			super(api);
+		}
+
+		@Override
+		public void visitFormalTypeParameter(String name) {
+			System.out.println("visit type param: " + name);
+			this.state = FORMAL;
+		}
+
+		@Override
+		public void visitTypeVariable(String name) {
+			if(this.state != STOP) {
+				System.out.println("visit type var: " + name);
+			}
+		}
+
+		@Override
+		public SignatureVisitor visitClassBound() {
+			this.state = BOUND;
+			System.out.println("visit class bound");
+			return this;
+		}
+
+		@Override
+		public SignatureVisitor visitInterfaceBound() {
+			this.state = BOUND_IFACE;
+			System.out.println("visit interface bound");
+			return this;
+		}
+
+		@Override
+		public void visitClassType(String name) {
+			System.out.println("visit class type: " + name);
+		}
+
+		@Override
+		public void visitBaseType(char descriptor) {
+			System.out.println("visit base type: " + descriptor);
+		}
+
+		@Override
+		public SignatureVisitor visitArrayType() {
+			//TODO Arrays shouldn't be possible in formal state??
+			return this;
+		}
+
+		@Override
+		public void visitInnerClassType(String name) {
+			//TODO Inner class type shouldn't be possible in formal state??
+			System.out.println("visit inner class type: " + name);
+		}
+
+		@Override
+		public SignatureVisitor visitParameterType() {
+			this.state = STOP;
+			return this;
+		}
+
+		@Override
+		public SignatureVisitor visitReturnType() {
+			this.state = STOP;
+			return this;
+		}
 	}
 }

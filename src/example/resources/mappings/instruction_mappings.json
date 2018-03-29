@@ -13,14 +13,14 @@
 		"identification": "method_call",
 		"desc": ["(Ljava/lang/String;)Ljava/util/Map;"],
 		"names": ["print"],
-		"owners": ["program/SomeClass"]
+		"owners": ["program/SomeClassBody$SomeClass"]
 	},
 	"after_init_print": {
 		"type": "instruction",
 		"identification": "method_call",
 		"desc": ["(Ljava/lang/String;)Ljava/util/Map;"],
 		"names": ["print"],
-		"owners": ["program/SomeClass"],
+		"owners": ["program/SomeClassBody$SomeClass"],
 		"before": false
 	},
 	"this": {

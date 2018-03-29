@@ -7,9 +7,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /**
- * This annotation can be added to interceptors to disable signature compatibility checking.
+ * This annotation can be added to accessor classes or interceptors to disable signature compatibility checking.
+ * If added to a class only the class's signature will not be checked.
  * 
  * @see Interceptor
+ * @see IAccessor
  */
 @Retention(RUNTIME)
 @Target(METHOD)

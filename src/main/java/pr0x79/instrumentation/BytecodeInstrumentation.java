@@ -673,6 +673,11 @@ public class BytecodeInstrumentation {
 			LabelNode interceptionScopeStart = new LabelNode();
 			LabelNode interceptionScopeEnd = new LabelNode();
 
+			System.out.println("FULL SIG: " + targetMethod.signature);
+
+			if(targetMethod.signature != null)
+			SignatureParser.parseFormalSignature(targetMethod.signature);
+			
 			String returnSig = null;
 			if(targetMethod.signature != null) {
 				ReturnTypeSignatureMapper mapper = new ReturnTypeSignatureMapper(Opcodes.ASM5);
@@ -680,9 +685,10 @@ public class BytecodeInstrumentation {
 				returnSig = mapper.getSignature();
 			}
 
+			System.out.println("CLS SIG: " + clsNode.signature);
 			System.out.println("RET SIG: " + returnSig);
 			System.out.println("CONT SIG: " + interceptor.getContextSignature());
-			
+
 			Type contextReturnType;
 			Map<Integer, Type> contextSigTypes = new HashMap<>();
 			if(interceptor.getContextSignature() != null) {
@@ -693,9 +699,9 @@ public class BytecodeInstrumentation {
 			} else {
 				contextReturnType = Type.VOID_TYPE;
 			}
-			
+
 			System.out.println("RET TYPE: " + contextReturnType + " " + Type.VOID_TYPE.getSort());
-			
+
 			//TODO Verify context sig
 			if((returnSig == null) != (interceptor.getContextSignature() == null)) {
 				throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
@@ -843,7 +849,7 @@ public class BytecodeInstrumentation {
 
 					//Insert jump target
 					targetMethod.instructions.insertBefore(exitNode, exitTarget);
-					
+
 					exitTargets[i] = exitTarget;
 				}
 

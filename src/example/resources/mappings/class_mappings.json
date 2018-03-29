@@ -3,6 +3,6 @@
 		"names": ["program/Main"]
 	},
 	"SomeClass": {
-		"names": ["program/SomeClass"]
+		"names": ["program/SomeClassBody$SomeClass"]
 	}
 }

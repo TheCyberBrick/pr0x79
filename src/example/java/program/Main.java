@@ -1,5 +1,7 @@
 package program;
 
+import program.SomeClassBody.SomeClass;
+
 public class Main {
 
 	/*
@@ -21,7 +23,7 @@ public class Main {
 	}
 
 	private void init() {
-		this.obj = new SomeClass("Hello World!");
+		this.obj = new SomeClassBody().create("Hello World!");
 
 		this.obj.print("Testing input value");
 	}

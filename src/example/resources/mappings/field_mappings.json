@@ -1,6 +1,6 @@
 {
 	"Main_obj": {
-		"desc": ["Lprogram/SomeClass;"],
+		"desc": ["Lprogram/SomeClassBody$SomeClass;"],
 		"names": ["obj"]
 	},
 	"SomeClass_value": {
