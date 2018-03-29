@@ -3,24 +3,17 @@ package pr0x79.instrumentation.accessor;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.signature.SignatureReader;
-import org.objectweb.asm.signature.SignatureVisitor;
-import org.objectweb.asm.signature.SignatureWriter;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import pr0x79.instrumentation.BytecodeInstrumentation;
-import pr0x79.instrumentation.MethodParameterSignaturesMapper;
-import pr0x79.instrumentation.SignatureRewriter;
 import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodModifierException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidReturnTypeException;
@@ -29,6 +22,9 @@ import pr0x79.instrumentation.identification.IFieldIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier.MethodDescription;
 import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.signature.SignatureParser;
+import pr0x79.instrumentation.signature.SignatureParser.Signature;
+import pr0x79.instrumentation.signature.SignatureParser.TypeSymbol;
 
 /**
  * Stores the data for a registered class accessor and its
@@ -118,7 +114,7 @@ public final class ClassAccessorData {
 				throw new InvalidMethodModifierException(String.format("Method interceptor %s#%s is a static method", className, method.name + method.desc), null, className, new MethodDescription(method.name, method.desc), Modifier.STATIC);
 			}
 
-			String contextSig = null;
+			TypeSymbol contextSig = null;
 			int contextParam = -1;
 			List<LocalVarData> methodLocalVars = new ArrayList<>();
 			Type[] params = Type.getArgumentTypes(method.desc);
@@ -130,48 +126,11 @@ public final class ClassAccessorData {
 					contextParam = i;
 					
 					if(method.signature != null) {
-						Map<Integer, String> sigs = new HashMap<>();
-						MethodParameterSignaturesMapper mapper = new MethodParameterSignaturesMapper(Opcodes.ASM5);
-						
-						new SignatureReader(method.signature).accept(mapper);
-						mapper.fill(sigs);
-						String contextParamSig = sigs.get(contextParam);
-						
-						if(contextParamSig != null) {
-							final SignatureWriter contexSigWriter = new SignatureWriter();
-							SignatureRewriter rewriter = new SignatureRewriter(Opcodes.ASM5) {
-								private int depth = 0;
-								
-								@Override
-								public void visitInnerClassType(String name) {
-									if(!name.equals(Type.getInternalName(IInterceptorContext.class))) {
-										this.writer = contexSigWriter;
-									}
-									this.depth++;
-									super.visitInnerClassType(name);
-								}
-								
-								@Override
-								public void visitClassType(String name) {
-									if(!name.equals(Type.getInternalName(IInterceptorContext.class))) {
-										this.writer = contexSigWriter;
-									}
-									this.depth++;
-									super.visitClassType(name);
-								}
-								
-								@Override
-								public void visitEnd() {
-									this.depth--;
-									if(this.depth == 0) {
-										this.writer = null;
-									}
-									super.visitEnd();
-								}
-							};
-							new SignatureReader(contextParamSig).accept(rewriter);
-							
-							contextSig = contexSigWriter.toString();
+						Signature sig = SignatureParser.parse(method.signature);
+						for(TypeSymbol paramSig : sig.parameters) {
+							if(!paramSig.isVariable() && paramSig.getAsClass().getType().getClassName().equals(IInterceptorContext.class.getName())) {
+								contextSig = paramSig;
+							}
 						}
 					}
 					

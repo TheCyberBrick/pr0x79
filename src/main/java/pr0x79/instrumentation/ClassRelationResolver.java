@@ -1,66 +1,73 @@
 package pr0x79.instrumentation;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.util.List;
 import java.util.function.Function;
 
-import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.ClassNode;
+
+import pr0x79.instrumentation.signature.ClassHierarchy;
 
 public class ClassRelationResolver {
 	private final ClassLoader loader;
-	private final ClassReader cls;
+	private final ClassHierarchy hierarchy;
+	private final String name;
 
 	/**
 	 * Creates a new class relation resolver
-	 * @param cls The internal name of the class
-	 * @throws IOException
+	 * @param hierarchy The class hierarchy
+	 * @param loader The class loader that is loading or has loaded the class
+	 * @param name The class name
 	 */
-	public ClassRelationResolver(String cls) throws IOException {
-		this.loader = ClassRelationResolver.class.getClassLoader();
-		this.cls = this.readClass(cls);
+	public ClassRelationResolver(ClassHierarchy hierarchy, ClassLoader loader, String name) {
+		this.loader = loader;
+		this.hierarchy = hierarchy;
+		this.name = name;
 	}
 
 	/**
-	 * Reads a class into a {@link ClassReader}
-	 * @param cls The internal name of the class
-	 * @return
-	 * @throws IOException
-	 */
-	private ClassReader readClass(String cls) throws IOException {
-		InputStream is = this.loader.getResourceAsStream(cls + ".class");
-		try {
-			return new ClassReader(is);
-		} finally {
-			is.close();
-		}
-	}
-
-	/**
-	 * Traverses all superclasses in BFS order
+	 * Traverses all superclasses in DFS order
 	 * @param traverser
 	 * @param traverseInterfaces
-	 * @throws IOException 
 	 */
-	public boolean traverseSuperclasses(Function<String, Boolean> traverser, boolean traverseInterfaces) throws IOException {
-		return this.traverseSuperclasses(this.cls, traverser, traverseInterfaces);
+	public boolean traverseSuperclasses(Function<String, Boolean> traverser, boolean traverseInterfaces) {
+		ClassNode cls = this.hierarchy.getClass(this.loader, this.name);
+		if(cls == null) {
+			throw new RuntimeException(String.format("Class %s was not found in class hierarchy", this.name));
+		}
+		return this.traverseSuperclasses(cls, traverser, traverseInterfaces);
 	}
 
-	private boolean traverseSuperclasses(ClassReader cls, Function<String, Boolean> traverser, boolean traverseInterfaces) throws IOException {
-		String type = cls.getClassName();
-		ClassReader info = cls;
+	private boolean traverseSuperclasses(ClassNode cls, Function<String, Boolean> traverser, boolean traverseInterfaces) {
+		String type = cls.name;
+		ClassNode info = cls;
 		while (!"java/lang/Object".equals(type)) {
-			if(traverser.apply(type)) return true;
+			if(traverser.apply(type)) {
+				return true;
+			}
 			if(traverseInterfaces) {
-				String[] itfs = info.getInterfaces();
+				List<String> itfs = info.interfaces;
 				for(String itf : itfs) {
-					if(traverser.apply(itf)) return true;
+					if(traverser.apply(itf)) {
+						return true;
+					}
 				}
 				for(String itf : itfs) {
-					if(this.traverseSuperclasses(this.readClass(itf), traverser, true)) return true;
+					ClassNode itfNode = this.hierarchy.getClass(this.loader, itf);
+					if(itfNode == null) {
+						throw new RuntimeException(String.format("Class %s was not found in class hierarchy", itf));
+					}
+					if(this.traverseSuperclasses(itfNode, traverser, true)) {
+						return true;
+					}
 				}
 			}
-			type = info.getSuperName();
-			info = this.readClass(type);
+			type = info.superName;
+			if(type != null) {
+				info = this.hierarchy.getClass(this.loader, type);
+				if(info == null) {
+					throw new RuntimeException(String.format("Class %s was not found in class hierarchy", type));
+				}
+			}
 		}
 		return false;
 	}

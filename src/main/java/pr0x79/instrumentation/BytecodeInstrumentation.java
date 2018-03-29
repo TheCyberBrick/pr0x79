@@ -1,6 +1,5 @@
 package pr0x79.instrumentation;
 
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -12,11 +11,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.StringJoiner;
 
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.signature.SignatureReader;
+import org.objectweb.asm.signature.SignatureWriter;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -52,7 +52,6 @@ import pr0x79.instrumentation.exception.accessor.field.FieldAccessorTakenExcepti
 import pr0x79.instrumentation.exception.accessor.field.InvalidGetterTypeException;
 import pr0x79.instrumentation.exception.accessor.field.InvalidSetterTypeException;
 import pr0x79.instrumentation.exception.accessor.fieldgenerator.FieldGeneratorTakenException;
-import pr0x79.instrumentation.exception.accessor.method.InvalidContextSignatureException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodDescriptorException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidMethodExceptionsException;
 import pr0x79.instrumentation.exception.accessor.method.InvalidParameterTypeException;
@@ -70,12 +69,23 @@ import pr0x79.instrumentation.identification.IClassIdentifier;
 import pr0x79.instrumentation.identification.IFieldIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier.MethodDescription;
+import pr0x79.instrumentation.signature.ClassHierarchy;
+import pr0x79.instrumentation.signature.SignatureParser;
+import pr0x79.instrumentation.signature.SignatureTypesResolver;
+import pr0x79.instrumentation.signature.SignatureParser.Signature;
+import pr0x79.instrumentation.signature.SignatureParser.SignatureSymbol;
+import pr0x79.instrumentation.signature.SignatureParser.TypeSymbol;
 
 /**
  * Instruments classes using the registered {@link IAccessor}s
  */
 public class BytecodeInstrumentation {
 	private Accessors accessors;
+	private final ClassHierarchy hierarchy;
+
+	public BytecodeInstrumentation(ClassHierarchy hierarchy) {
+		this.hierarchy = hierarchy;
+	}
 
 	/**
 	 * Sets the accessors
@@ -237,9 +247,10 @@ public class BytecodeInstrumentation {
 	/**
 	 * Instruments the specified {@link ClassNode} according to the
 	 * registered {@link IAccessor}s
+	 * @param loader
 	 * @param clsNode
 	 */
-	public void instrumentClass(ClassNode clsNode) {
+	public void instrumentClass(ClassLoader loader, ClassNode clsNode) {
 		List<ClassAccessorData> classAccessors = new ArrayList<>();
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
 			if(isIdentifiedClass(accessor.getClassIdentifier(), clsNode.name)) {
@@ -259,31 +270,33 @@ public class BytecodeInstrumentation {
 
 		//Instrument accessor and interceptor methods
 		for(ClassAccessorData classAccessor : classAccessors) {
-			this.instrumentFieldAccessors(clsNode, classAccessor);
-			this.instrumentFieldGenerators(clsNode, classAccessor);
-			this.instrumentMethodAccessors(clsNode, classAccessor);
-			this.instrumentMethodInterceptors(clsNode, classAccessor);
+			this.instrumentFieldAccessors(loader, clsNode, classAccessor);
+			this.instrumentFieldGenerators(loader, clsNode, classAccessor);
+			this.instrumentMethodAccessors(loader, clsNode, classAccessor);
+			this.instrumentMethodInterceptors(loader, clsNode, classAccessor);
 		}
 	}
 
 	/**
 	 * Instruments all registered field accessors
+	 * @param loader
 	 * @param clsNode
 	 * @param classAccessor
 	 */
-	private void instrumentFieldAccessors(ClassNode clsNode, ClassAccessorData classAccessor) {
+	private void instrumentFieldAccessors(ClassLoader loader, ClassNode clsNode, ClassAccessorData classAccessor) {
 		for(FieldAccessorData fieldAccessor : classAccessor.getFieldAccessors()) {
-			this.instrumentFieldAccessor(fieldAccessor, clsNode, classAccessor.getAccessorClass());
+			this.instrumentFieldAccessor(loader, fieldAccessor, clsNode, classAccessor.getAccessorClass());
 		}
 	}
 
 	/**
 	 * Instruments a single field accessor
+	 * @param loader
 	 * @param fieldAccessor
 	 * @param clsNode
 	 * @param accessorClass
 	 */
-	private void instrumentFieldAccessor(FieldAccessorData fieldAccessor, ClassNode clsNode, String accessorClass) {
+	private void instrumentFieldAccessor(ClassLoader loader, FieldAccessorData fieldAccessor, ClassNode clsNode, String accessorClass) {
 		MethodNode accessorMethod = fieldAccessor.getAccessorMethod();
 		Type[] accessorParams = Type.getArgumentTypes(accessorMethod.desc);
 		Type accessorReturnType = Type.getReturnType(accessorMethod.desc);
@@ -300,11 +313,11 @@ public class BytecodeInstrumentation {
 					throw new MultipleFieldsIdentifiedException(accessorClass, new MethodDescription(accessorMethod.name, accessorMethod.desc), fieldAccessor.getIdentifierId(), identifier);
 				}
 				if(fieldAccessor.isSetter()) {
-					if(!this.isSetterTypeValidForField(fieldNode.desc, accessorMethod)) {
+					if(!this.isSetterTypeValidForField(loader, fieldNode.desc, accessorMethod)) {
 						throw new InvalidSetterTypeException(accessorClass, new MethodDescription(accessorMethod.name, accessorMethod.desc), accessorParams[0].getClassName(), Type.getType(fieldNode.desc).getClassName());
 					}
 				} else {
-					if(!this.isGetterTypeValidForField(fieldNode.desc, accessorMethod)) {
+					if(!this.isGetterTypeValidForField(loader, fieldNode.desc, accessorMethod)) {
 						throw new InvalidGetterTypeException(accessorClass, new MethodDescription(accessorMethod.name, accessorMethod.desc), accessorReturnType.getClassName(), Type.getType(fieldNode.desc).getClassName());
 					}
 				}
@@ -326,22 +339,24 @@ public class BytecodeInstrumentation {
 
 	/**
 	 * Instruments all registered field generators
+	 * @param loader
 	 * @param clsNode
 	 * @param classAccessor
 	 */
-	private void instrumentFieldGenerators(ClassNode clsNode, ClassAccessorData classAccessor) {
+	private void instrumentFieldGenerators(ClassLoader loader, ClassNode clsNode, ClassAccessorData classAccessor) {
 		for(FieldGeneratorData fieldGenerator : classAccessor.getFieldGenerators()) {
-			this.instrumentFieldGenerator(fieldGenerator, clsNode, classAccessor.getAccessorClass());
+			this.instrumentFieldGenerator(loader, fieldGenerator, clsNode, classAccessor.getAccessorClass());
 		}
 	}
 
 	/**
 	 * Instruments a single field generator
+	 * @param loader
 	 * @param fieldGenerator
 	 * @param clsNode
 	 * @param accessorClass
 	 */
-	private void instrumentFieldGenerator(FieldGeneratorData fieldGenerator, ClassNode clsNode, String accessorClass) {
+	private void instrumentFieldGenerator(ClassLoader loader, FieldGeneratorData fieldGenerator, ClassNode clsNode, String accessorClass) {
 		MethodNode accessorMethod = fieldGenerator.getAccessorMethod();
 		Type accessorReturnType = Type.getReturnType(accessorMethod.desc);
 		for(MethodNode methodNode : clsNode.methods) {
@@ -352,7 +367,7 @@ public class BytecodeInstrumentation {
 		boolean generate = true;
 		for(FieldNode field : clsNode.fields) {
 			if(field.name.equals(fieldGenerator.getFieldName())) {
-				if(!this.isTypeInstanceof(Type.getType(field.desc), fieldGenerator.getFieldType())) {
+				if(!this.isTypeInstanceof(loader, Type.getType(field.desc), fieldGenerator.getFieldType())) {
 					throw new FieldGeneratorTakenException(String.format("Field %s for field generator %s#%s is already taken", fieldGenerator.getFieldName(), accessorClass, accessorMethod.name + accessorMethod.desc), accessorClass, new MethodDescription(accessorMethod.name, accessorMethod.desc), fieldGenerator.getFieldName());
 				}
 				generate = false;
@@ -376,10 +391,11 @@ public class BytecodeInstrumentation {
 
 	/**
 	 * Instruments all registered method accessors
+	 * @param loader
 	 * @param clsNode
 	 * @param classAccessor
 	 */
-	private void instrumentMethodAccessors(ClassNode clsNode, ClassAccessorData classAccessor) {
+	private void instrumentMethodAccessors(ClassLoader loader, ClassNode clsNode, ClassAccessorData classAccessor) {
 		for(MethodAccessorData methodAccessor : classAccessor.getMethodAccessors()) {
 			MethodNode accessorMethod = methodAccessor.getAccessorMethod();
 			MethodNode targetMethod = null;
@@ -394,7 +410,7 @@ public class BytecodeInstrumentation {
 					if(targetMethod != null) {
 						throw new MultipleMethodsIdentifiedException(classAccessor.getAccessorClass(), new MethodDescription(methodAccessor.getAccessorMethod().name, accessorMethod.desc), methodAccessor.getIdentifierId(), identifier);
 					}
-					if(!this.isMethodAccessorValid(methodNode.desc, accessorMethod)) {
+					if(!this.isMethodAccessorValid(loader, methodNode.desc, accessorMethod)) {
 						throw new InvalidMethodDescriptorException(String.format("Method accessor %s#%s descriptor does not match. Current: %s, Expected: %s, or accessors of those classes", classAccessor.getAccessorClass(), accessorMethod.name + accessorMethod.desc, accessorMethod.desc, methodNode.desc), classAccessor.getAccessorClass(), new MethodDescription(accessorMethod.name, accessorMethod.desc), accessorMethod.desc, methodNode.desc);
 					}
 					targetMethod = methodNode;
@@ -576,10 +592,11 @@ public class BytecodeInstrumentation {
 
 	/**
 	 * Instruments all interceptors
+	 * @param loader
 	 * @param interceptor
 	 * @param clsNode
 	 */
-	private void instrumentMethodInterceptors(ClassNode clsNode, ClassAccessorData classAccessor) {
+	private void instrumentMethodInterceptors(ClassLoader loader, ClassNode clsNode, ClassAccessorData classAccessor) {
 		List<MethodInterceptorData> classInterceptors = new ArrayList<>();
 		for(MethodInterceptorData interceptor : classAccessor.getMethodInterceptors()) {
 			if(isIdentifiedClass(interceptor.getClassIdentifier(), clsNode.name)) {
@@ -675,10 +692,17 @@ public class BytecodeInstrumentation {
 
 			System.out.println("FULL SIG: " + targetMethod.signature);
 
-			if(targetMethod.signature != null)
-			SignatureParser.parseFormalSignature(targetMethod.signature);
-			
-			String returnSig = null;
+			if(targetMethod.signature != null) {
+				Signature sig = SignatureParser.parse(targetMethod.signature); //TODO Sig parser
+				StringJoiner joiner = new StringJoiner(", ");
+				for(SignatureSymbol param : sig.formalTypeParameters) {
+					joiner.add(param.toString());
+				}
+				System.out.println("PARAMS: " + joiner.toString());
+				SignatureTypesResolver.resolve(null, sig);
+			}
+
+			/*String returnSig = null;
 			if(targetMethod.signature != null) {
 				ReturnTypeSignatureMapper mapper = new ReturnTypeSignatureMapper(Opcodes.ASM5);
 				new SignatureReader(targetMethod.signature).accept(mapper);
@@ -716,11 +740,11 @@ public class BytecodeInstrumentation {
 				}
 				for(Entry<Integer, Type> returnSigTypeEntry : returnSigTypes.entrySet()) {
 					Type contextSigType = contextSigTypes.get(returnSigTypeEntry.getKey());
-					if(!this.isTypeInstanceof(returnSigTypeEntry.getValue(), contextSigType)) {
+					if(!this.isTypeInstanceof(loader, returnSigTypeEntry.getValue(), contextSigType)) {
 						throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
 					}
 				}
-			}
+			}*/
 
 			LocalVariableNode contextVarNode = this.generateLocalVariable(Type.getDescriptor(IInterceptorContext.class), interceptor.getContextSignature(), interceptionScopeStart, interceptionScopeEnd, targetMethod);
 
@@ -755,7 +779,7 @@ public class BytecodeInstrumentation {
 					Type localVarType = Type.getType(localVariable.desc);
 					Type paramType = Type.getArgumentTypes(interceptor.getInterceptorMethodDesc())[localVarData.getParameterIndex()];
 					ClassAccessorData paramAsAccessor = this.accessors.getAccessorByClassName(paramType.getClassName());
-					if((paramAsAccessor != null && !this.isTypeInstanceof(localVarType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !paramType.equals(localVarType))) {
+					if((paramAsAccessor != null && !this.isTypeInstanceof(loader, localVarType, Type.getObjectType(paramAsAccessor.getAccessorClass().replace('.', '/')))) || (paramAsAccessor == null && !paramType.equals(localVarType))) {
 						throw new InvalidParameterTypeException(String.format("@LocalVar parameter %d of method %s#%s does not match. Current: %s, Expected: %s, or an accessor of that class. Local variable index: %d. Local variable identifier: %s", localVarData.getParameterIndex(), interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), paramType.getClassName(), Type.getType(localVariable.desc).getClassName(), localVariable.index, localVarData.getInstructionIdentifierId()), interceptor.getAccessorClass(), new MethodDescription(interceptor.getInterceptorMethod(), interceptor.getInterceptorMethodDesc()), localVarData.getParameterIndex(), paramType.getClassName(), Type.getType(localVariable.desc).getClassName());
 					}
 					insertions.add(new VarInsnNode(paramType.getOpcode(Opcodes.ILOAD), localVariable.index));
@@ -865,7 +889,7 @@ public class BytecodeInstrumentation {
 		}
 	}
 
-	private LocalVariableNode generateLocalVariable(String desc, String sig, LabelNode scopeStart, LabelNode scopeEnd, MethodNode owner) {
+	private LocalVariableNode generateLocalVariable(String desc, TypeSymbol sig, LabelNode scopeStart, LabelNode scopeEnd, MethodNode owner) {
 		Set<String> methodLocalVarNames = new HashSet<>();
 		for(LocalVariableNode localVar : owner.localVariables) {
 			methodLocalVarNames.add(localVar.name);
@@ -885,7 +909,18 @@ public class BytecodeInstrumentation {
 			break;
 		}
 
-		LocalVariableNode variable = new LocalVariableNode(contextVarName, desc, sig, scopeStart, scopeEnd, contextVarIndex);
+		String sigStr = null;
+
+		if(sig != null) {
+			SignatureWriter sigWriter = new SignatureWriter();
+			sig.accept(sigWriter);
+
+			sigStr = sigWriter.toString();
+
+			System.out.println("CONTEXT SIG: " + sigStr);
+		}
+
+		LocalVariableNode variable = new LocalVariableNode(contextVarName, desc, sigStr, scopeStart, scopeEnd, contextVarIndex);
 		owner.localVariables.add(variable);
 		return variable;
 	}
@@ -915,13 +950,14 @@ public class BytecodeInstrumentation {
 
 	/**
 	 * Checks if the method accessor parameters and return types are valid for the specified desc of the method
+	 * @param loader The class loader that is loading the accessor
 	 * @param desc The desc of the original method
 	 * @param method The proxy method
 	 * @return
 	 */
-	private boolean isMethodAccessorValid(String desc, MethodNode method) {
+	private boolean isMethodAccessorValid(ClassLoader loader, String desc, MethodNode method) {
 		Type returnType = Type.getReturnType(desc);
-		if(!this.isTypeInstanceof(returnType, Type.getReturnType(method.desc))) {
+		if(!this.isTypeInstanceof(loader, returnType, Type.getReturnType(method.desc))) {
 			return false;
 		}
 		Type[] methodParams = Type.getArgumentTypes(method.desc);
@@ -930,7 +966,7 @@ public class BytecodeInstrumentation {
 			return false;
 		}
 		for(int i = 0; i < descParams.length; i++) {
-			if(!this.isTypeInstanceof(descParams[i], methodParams[i])) {
+			if(!this.isTypeInstanceof(loader, descParams[i], methodParams[i])) {
 				return false;
 			}
 		}
@@ -939,22 +975,24 @@ public class BytecodeInstrumentation {
 
 	/**
 	 * Checks if the getter type is valid for the specified desc of the field
+	 * @param loader The class loader that is loading the accessor
 	 * @param desc The desc of the original field
 	 * @param method The proxy method
 	 * @return
 	 */
-	private boolean isGetterTypeValidForField(String desc, MethodNode method) {
-		return this.isTypeInstanceof(Type.getType(desc), Type.getReturnType(method.desc));
+	private boolean isGetterTypeValidForField(ClassLoader loader, String desc, MethodNode method) {
+		return this.isTypeInstanceof(loader, Type.getType(desc), Type.getReturnType(method.desc));
 	}
 
 	/**
 	 * Checks if the setter type is valid for the specified desc of the field
+	 * @param loader The class loader that is loading the accessor
 	 * @param desc The desc of the original field
 	 * @param method The proxy method
 	 * @return
 	 */
-	private boolean isSetterTypeValidForField(String desc, MethodNode method) {
-		return this.isTypeInstanceof(Type.getType(desc), Type.getArgumentTypes(method.desc)[0]);
+	private boolean isSetterTypeValidForField(ClassLoader loader, String desc, MethodNode method) {
+		return this.isTypeInstanceof(loader, Type.getType(desc), Type.getArgumentTypes(method.desc)[0]);
 	}
 
 	/**
@@ -974,7 +1012,7 @@ public class BytecodeInstrumentation {
 	 * @param otherType
 	 * @return
 	 */
-	private boolean isTypeInstanceof(Type type, Type otherType) {
+	private boolean isTypeInstanceof(ClassLoader loader, Type type, Type otherType) {
 		if(type.getSort() == Type.ARRAY && otherType.getSort() == Type.ARRAY) {
 			type = type.getElementType();
 			otherType = otherType.getElementType();
@@ -988,12 +1026,12 @@ public class BytecodeInstrumentation {
 			//Get accessor data of otherType, if otherType is an accessor
 			final ClassAccessorData accessorInstance = this.accessors.getAccessorByClassName(otherType.getClassName());
 
-			IOException resolverException = null;
+			Exception resolverException = null;
 
 			final Type finalOtherType = otherType;
 
 			try {
-				ClassRelationResolver relation = new ClassRelationResolver(type.getInternalName());
+				ClassRelationResolver relation = new ClassRelationResolver(this.hierarchy, loader, type.getInternalName());
 				return relation.traverseSuperclasses(cls -> {
 					if(cls.equals(finalOtherType.getInternalName())) {
 						//type extends or implements otherType
@@ -1009,7 +1047,7 @@ public class BytecodeInstrumentation {
 
 					return false;
 				}, true);
-			} catch(IOException ex) {
+			} catch(Exception ex) {
 				resolverException = ex;
 			}
 

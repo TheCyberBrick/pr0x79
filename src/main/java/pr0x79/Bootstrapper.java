@@ -26,6 +26,7 @@ import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
 import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.signature.ClassHierarchy;
 
 public class Bootstrapper {
 	private static final Bootstrapper INSTANCE = new Bootstrapper();
@@ -35,14 +36,14 @@ public class Bootstrapper {
 	private final BytecodeInstrumentation instrumentor;
 
 	//Contains all accessor classes that were loaded through the class transformer
-	private final Map<ClassLoader, Set<String>> internallyLoadedAccessorClasses = new WeakHashMap<ClassLoader, Set<String>>();
-
+	private final ClassHierarchy hierarchy = new ClassHierarchy();
+	
 	private Set<IInstrumentor> instrumentors;
 	private boolean initializing = true;
 
 	private Bootstrapper() {
 		this.identifiers = new Identifiers(this);
-		this.instrumentor = new BytecodeInstrumentation();
+		this.instrumentor = new BytecodeInstrumentation(this.hierarchy);
 		this.accessors = new Accessors(this, this.identifiers, this.instrumentor);
 		this.instrumentor.setAccessors(this.accessors);
 	}
@@ -57,40 +58,6 @@ public class Bootstrapper {
 			throw new RuntimeException("Bootstrapper can only be initialized once");
 		}
 		INSTANCE.init(instrumentorClasses, inst);
-	}
-
-	/**
-	 * Adds the specified {@link IAccessor} to the internally loaded class list
-	 * @param loader
-	 * @param className
-	 */
-	private void addInternallyLoadedAccessor(ClassLoader loader, String className) {
-		synchronized(this.internallyLoadedAccessorClasses) {
-			Set<String> classes = this.internallyLoadedAccessorClasses.get(loader);
-			if (classes == null) {
-				this.internallyLoadedAccessorClasses.put(loader, classes = new HashSet<String>());
-			}
-			classes.add(className);
-		}
-	}
-
-	/**
-	 * Returns whether an {@link IAccessor} was loaded through the internal class transformer
-	 * @param loader
-	 * @param className
-	 * @return
-	 */
-	public boolean wasAccessorLoadedInternally(ClassLoader loader, String className) {
-		while(loader != null) {
-			synchronized(this.internallyLoadedAccessorClasses) {
-				Set<String> classes = this.internallyLoadedAccessorClasses.get(loader);
-				if (classes != null && classes.contains(className)) {
-					return true;
-				}
-			}
-			loader = loader.getParent();
-		}
-		return false;
 	}
 
 	/**
@@ -112,18 +79,18 @@ public class Bootstrapper {
 					ClassNode clsNode = new ClassNode();
 					classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
 
+					hierarchy.addClass(loader, clsNode);
+					
 					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
 
 					if(classIdentifier != null) {
-						addInternallyLoadedAccessor(loader, className.replace("/", "."));
-
 						if(instrumentor.instrumentAccessorClass(clsNode, Bootstrapper.this)) {
 							modified = true;
 						}
 					}
 
 					if(className != null && instrumentor.acceptsClass(className)) {
-						instrumentor.instrumentClass(clsNode);
+						instrumentor.instrumentClass(loader, clsNode);
 						modified = true;
 					}
 
@@ -172,7 +139,7 @@ public class Bootstrapper {
 		}
 
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			if(this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), accessor.getAccessorClass())) {
+			if(this.hierarchy.getClass(Bootstrapper.class.getClassLoader(), accessor.getAccessorClass().replace(".", "/"), false) != null) {
 				throw new InstrumentorException(String.format("Accessor class %s was already loaded before or during the bootstrapper initialization!", accessor.getAccessorClass()));
 			}
 		}
@@ -182,7 +149,7 @@ public class Bootstrapper {
 				@SuppressWarnings("unchecked")
 				Class<IAccessor> accessorCls = (Class<IAccessor>) Bootstrapper.class.getClassLoader().loadClass(accessor.getAccessorClass());
 
-				if(!this.wasAccessorLoadedInternally(Bootstrapper.class.getClassLoader(), accessorCls.getName())) {
+				if(this.hierarchy.getClass(Bootstrapper.class.getClassLoader(), accessorCls.getName().replace(".", "/"), false) == null) {
 					throw new InstrumentorException(String.format("Accessor class %s could not be loaded properly!", accessorCls.getName()));
 				}
 			} catch (ClassNotFoundException e) {

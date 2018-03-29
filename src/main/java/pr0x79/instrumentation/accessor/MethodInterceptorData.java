@@ -11,6 +11,7 @@ import pr0x79.instrumentation.identification.IInstructionIdentifier;
 import pr0x79.instrumentation.identification.IInstructionIdentifier.InstructionType;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.signature.SignatureParser.TypeSymbol;
 
 public final class MethodInterceptorData {
 	private final List<LocalVarData> localVars;
@@ -22,11 +23,11 @@ public final class MethodInterceptorData {
 	private IInstructionIdentifier[] exitInstructionIdentifiers;
 	private IClassIdentifier classIdentifier;
 	private final int contextParam;
-	private final String contextSig;
+	private final TypeSymbol contextSig;
 
 	MethodInterceptorData(String classIdentifierId, String methodIdentifierId, String instructionIdentifierId, String[] exitInstructionIdentifierIds, 
 			String accessorClass, String interceptorMethod, String interceptorMethodDesc, String interceptorMethodSig, List<LocalVarData> localVars, int contextParam,
-			String contextSig) {
+			TypeSymbol contextSig) {
 		this.classIdentifierId = classIdentifierId;
 		this.methodIdentifierId = methodIdentifierId;
 		this.accessorClass = accessorClass;
@@ -52,7 +53,7 @@ public final class MethodInterceptorData {
 	 * Returns signature of the context parameter
 	 * @return
 	 */
-	public String getContextSignature() {
+	public TypeSymbol getContextSignature() {
 		return this.contextSig;
 	}
 	
