@@ -3,9 +3,7 @@ package pr0x79.instrumentation.accessor;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -44,20 +42,15 @@ public final class ClassAccessorData {
 		this.accessorClass = accessorClass;
 		this.classIdentifier = classIdentifier;
 
-		Set<String> takenMethodNames = new HashSet<>();
-		for(MethodNode method : clsNode.methods) {
-			takenMethodNames.add(method.name);
-		}
-
 		for(MethodNode method : clsNode.methods) {
 			boolean isAccessorOrInterceptor = false;
 
 			isAccessorOrInterceptor |= this.identifyMethodAccessor(method, identifiers);
 			isAccessorOrInterceptor |= this.identifyFieldAccessor(method, identifiers);
 			isAccessorOrInterceptor |= this.identifyFieldGenerator(method, identifiers);
-			isAccessorOrInterceptor |= this.identifyMethodInterceptor(method, identifiers, takenMethodNames, clsNode.name, identifierId);
+			isAccessorOrInterceptor |= this.identifyMethodInterceptor(method, identifiers, clsNode.name, identifierId);
 
-			if(!isAccessorOrInterceptor && (method.access & Opcodes.ACC_ABSTRACT) != 0 && (method.access & Opcodes.ACC_STATIC) == 0 && !instrumentor.isGeneratedMethod(clsNode.name, method)) {
+			if(!isAccessorOrInterceptor && (method.access & Opcodes.ACC_ABSTRACT) != 0 && (method.access & Opcodes.ACC_STATIC) == 0) {
 				throw new InstrumentorException(String.format("Class accessor %s has an abstract method: %s", accessorClass, method.name + method.desc));
 			}
 		}
@@ -92,9 +85,11 @@ public final class ClassAccessorData {
 	 * Identifies and validates a method interceptor
 	 * @param method
 	 * @param identifiers
+	 * @param className
+	 * @param classIdentifierId
 	 * @return
 	 */
-	private boolean identifyMethodInterceptor(MethodNode method, Identifiers identifiers, Set<String> takenMethodNames, String className, String classIdentifierId) {
+	private boolean identifyMethodInterceptor(MethodNode method, Identifiers identifiers, String className, String classIdentifierId) {
 		AnnotationNode interceptorAnnotation = null;
 
 		if(method.visibleAnnotations != null) {
@@ -124,7 +119,7 @@ public final class ClassAccessorData {
 						throw new InstrumentorException(String.format("Method interceptor %s#%s has multiple InterceptorContext parameters", className, method.name + method.desc));
 					}
 					contextParam = i;
-					
+
 					if(method.signature != null) {
 						Signature sig = SignatureParser.parse(method.signature);
 						for(TypeSymbol paramSig : sig.parameters) {
@@ -133,7 +128,7 @@ public final class ClassAccessorData {
 							}
 						}
 					}
-					
+
 					continue;
 				}
 				AnnotationNode localVarAnnotation = null;
@@ -155,11 +150,7 @@ public final class ClassAccessorData {
 				if(instructionIdentifierId == null) {
 					throw new InstrumentorException(String.format("@LocalVar for parameter %d of method %s#%s has invalid arguments", i, className, method.name + method.desc));
 				}
-				String generatedSetterName = BytecodeInstrumentation.getUniqueName(takenMethodNames);
-				takenMethodNames.add(generatedSetterName);
-				String generatedGetterName = BytecodeInstrumentation.getUniqueName(takenMethodNames);
-				takenMethodNames.add(generatedGetterName);
-				LocalVarData localVar = new LocalVarData(method.name, method.desc, i, Type.getObjectType(className).getClassName(), instructionIdentifierId, generatedSetterName, generatedGetterName);
+				LocalVarData localVar = new LocalVarData(method.name, method.desc, i, Type.getObjectType(className).getClassName(), instructionIdentifierId);
 				methodLocalVars.add(localVar);
 			}
 
@@ -176,7 +167,7 @@ public final class ClassAccessorData {
 					exitInstructionIdentifierIds[i] = (String) exitInstructionIdentifierIdObjs.get(i);
 				}
 			}
-			
+
 			if(methodIdentifierId == null || instructionIdentifierId == null || exitInstructionIdentifierIds == null) {
 				throw new InstrumentorException(String.format("Method interceptor for method %s#%s has invalid arguments", className, method.name + method.desc));
 			}

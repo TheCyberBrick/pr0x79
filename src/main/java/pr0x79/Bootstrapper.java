@@ -7,12 +7,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.WeakHashMap;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -78,7 +75,7 @@ public class Bootstrapper {
 					ClassReader classReader = new ClassReader(bytes);
 					ClassNode clsNode = new ClassNode();
 					classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
-
+					
 					hierarchy.addClass(loader, clsNode);
 					
 					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);

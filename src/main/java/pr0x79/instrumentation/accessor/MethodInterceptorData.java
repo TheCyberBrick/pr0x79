@@ -48,7 +48,7 @@ public final class MethodInterceptorData {
 	public int getContextParameter() {
 		return this.contextParam;
 	}
-	
+
 	/**
 	 * Returns signature of the context parameter
 	 * @return
@@ -56,7 +56,7 @@ public final class MethodInterceptorData {
 	public TypeSymbol getContextSignature() {
 		return this.contextSig;
 	}
-	
+
 	/**
 	 * Returns the list of local variables that are imported and exported
 	 * @return
@@ -160,7 +160,7 @@ public final class MethodInterceptorData {
 	public String getInterceptorMethodSignature() {
 		return this.interceptorMethodSig;
 	}
-	
+
 	/**
 	 * Initializes the identifiers
 	 * @param identifiers
@@ -197,12 +197,12 @@ public final class MethodInterceptorData {
 			localVar.initIdentifiers(identifiers);
 		}
 	}
-	
+
 	@Internal(id = "create_interceptor_context")
 	public static IInterceptorContext<Object> createInterceptorContext(int params) {
 		return new InterceptorContext(params);
 	}
-	
+
 	@Internal(id = "check_exit")
 	public static boolean checkExit(int exit, int exits) {
 		if(exit == IInterceptorContext.DO_NOT_EXIT) {
@@ -212,21 +212,21 @@ public final class MethodInterceptorData {
 		}
 		throw new InvalidExitException(String.format("Interceptor returned with invalid exit %d", exit));
 	}
-	
+
 	@Internal(id = "check_return")
 	public static boolean checkReturn(Object val) {
 		return val != IInterceptorContext.DO_NOT_RETURN;
 	}
-	
-	private static class InterceptorContext implements IInterceptorContext<Object> {
-		private Object[] params;
+
+	public static final class InterceptorContext implements IInterceptorContext<Object> {
+		private final Object[] params;
 		private int exit = DO_NOT_EXIT;
 		private Object returnVal = DO_NOT_RETURN;
-		
+
 		private InterceptorContext(int params) {
 			this.params = new Object[params];
 		}
-		
+
 		@Override
 		public void exitAt(int index) {
 			if(index >= 0) {

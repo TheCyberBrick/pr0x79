@@ -9,33 +9,14 @@ public class LocalVarData {
 	private final String interceptorMethod, interceptorMethodDesc;
 	private final int parameterIndex;
 	private final String instructionIdentifierId, accessorClass;
-	private final String generatedSetterMethod, generatedGetterMethod;
 	private IInstructionIdentifier instructionIdentifier;
 
-	public LocalVarData(String interceptorMethod, String interceptorMethodDesc, int parameterIndex, String accessorClass, String instructionIdentifierId, String generatedSetterMethod, String generatedGetterMethod) {
+	public LocalVarData(String interceptorMethod, String interceptorMethodDesc, int parameterIndex, String accessorClass, String instructionIdentifierId) {
 		this.interceptorMethod = interceptorMethod;
 		this.interceptorMethodDesc = interceptorMethodDesc;
 		this.parameterIndex = parameterIndex;
 		this.instructionIdentifierId = instructionIdentifierId;
 		this.accessorClass = accessorClass;
-		this.generatedSetterMethod = generatedSetterMethod;
-		this.generatedGetterMethod = generatedGetterMethod;
-	}
-
-	/**
-	 * Returns the setter method that is generated to export the local variable
-	 * @return
-	 */
-	public String getGeneratedSetterMethod() {
-		return this.generatedSetterMethod;
-	}
-
-	/**
-	 * Returns the getter method that is generated to retrieve the exported local variable
-	 * @return
-	 */
-	public String getGeneratedGetterMethod() {
-		return this.generatedGetterMethod;
 	}
 
 	/**

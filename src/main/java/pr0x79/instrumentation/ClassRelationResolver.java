@@ -3,9 +3,8 @@ package pr0x79.instrumentation;
 import java.util.List;
 import java.util.function.Function;
 
-import org.objectweb.asm.tree.ClassNode;
-
 import pr0x79.instrumentation.signature.ClassHierarchy;
+import pr0x79.instrumentation.signature.ClassHierarchy.ClassData;
 
 public class ClassRelationResolver {
 	private final ClassLoader loader;
@@ -30,16 +29,16 @@ public class ClassRelationResolver {
 	 * @param traverseInterfaces
 	 */
 	public boolean traverseSuperclasses(Function<String, Boolean> traverser, boolean traverseInterfaces) {
-		ClassNode cls = this.hierarchy.getClass(this.loader, this.name);
+		ClassData cls = this.hierarchy.getClass(this.loader, this.name);
 		if(cls == null) {
 			throw new RuntimeException(String.format("Class %s was not found in class hierarchy", this.name));
 		}
 		return this.traverseSuperclasses(cls, traverser, traverseInterfaces);
 	}
 
-	private boolean traverseSuperclasses(ClassNode cls, Function<String, Boolean> traverser, boolean traverseInterfaces) {
+	private boolean traverseSuperclasses(ClassData cls, Function<String, Boolean> traverser, boolean traverseInterfaces) {
 		String type = cls.name;
-		ClassNode info = cls;
+		ClassData info = cls;
 		while (!"java/lang/Object".equals(type)) {
 			if(traverser.apply(type)) {
 				return true;
@@ -52,7 +51,7 @@ public class ClassRelationResolver {
 					}
 				}
 				for(String itf : itfs) {
-					ClassNode itfNode = this.hierarchy.getClass(this.loader, itf);
+					ClassData itfNode = this.hierarchy.getClass(this.loader, itf);
 					if(itfNode == null) {
 						throw new RuntimeException(String.format("Class %s was not found in class hierarchy", itf));
 					}
@@ -61,7 +60,7 @@ public class ClassRelationResolver {
 					}
 				}
 			}
-			type = info.superName;
+			type = info.superclass;
 			if(type != null) {
 				info = this.hierarchy.getClass(this.loader, type);
 				if(info == null) {
