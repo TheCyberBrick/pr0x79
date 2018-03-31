@@ -3,7 +3,8 @@ package pr0x79.instrumentation.accessor;
 import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.identification.IInstructionIdentifier;
 import pr0x79.instrumentation.identification.IInstructionIdentifier.InstructionType;
-import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.identification.Mappers.InstructionSearchType;
+import pr0x79.instrumentation.identification.Mappers;
 
 public class LocalVarData {
 	private final String interceptorMethod, interceptorMethodDesc;
@@ -60,16 +61,16 @@ public class LocalVarData {
 	}
 
 	/**
-	 * Initializes the identifiers
-	 * @param identifiers
+	 * Initializes the identifier
+	 * @param mappers
 	 */
-	public void initIdentifiers(Identifiers identifiers) {
-		this.instructionIdentifier = identifiers.getInstructionIdentifier(this.instructionIdentifierId);
+	public void initIdentifier(Mappers mappers) {
+		this.instructionIdentifier = mappers.getInstructionIdentifier(this.instructionIdentifierId, InstructionSearchType.LOCAL_VARIABLE);
 		if(this.instructionIdentifier == null) {
-			throw new InstrumentorException(String.format("Instruction identifier %s for importer %s#%s is not registered", this.instructionIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+			throw new InstrumentorException(String.format("Instruction identifier %s#%s[%s] is not mapped", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, this.instructionIdentifierId));
 		}
 		if(this.instructionIdentifier.getType() != InstructionType.LOCAL_VARIABLE) {
-			throw new InstrumentorException(String.format("Instruction identifier %s for importer %s#%s is not of type LOCAL_VARIABLE", this.instructionIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+			throw new InstrumentorException(String.format("Instruction identifier %s#%s[%s] is not of type LOCAL_VARIABLE", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, this.instructionIdentifierId));
 		}
 	}
 }

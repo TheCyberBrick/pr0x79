@@ -3,6 +3,16 @@
 		"type": "instruction",
 		"identification": "first_return"
 	},
+	"first_return-1": {
+		"type": "instruction",
+		"identification": "first_return",
+		"offset": -1
+	},
+	"first_return-2": {
+		"type": "instruction",
+		"identification": "first_return",
+		"offset": -2
+	},
 	"start": {
 		"type": "instruction",
 		"identification": "index",

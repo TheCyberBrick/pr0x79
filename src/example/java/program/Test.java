@@ -2,8 +2,13 @@ package program;
 
 public class Test {
 	public static void main(String[] args) {
-		Object[] objs = new Object[10];
-		int[] ints = new int[10];
-		objs[0] = ints;
+		int t = 0;
+		
+		switch(t) {
+		case 0:
+			break;
+		case 1:
+			break;
+		}
 	}
 }

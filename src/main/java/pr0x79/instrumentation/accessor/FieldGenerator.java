@@ -20,9 +20,10 @@ import pr0x79.instrumentation.Internal;
 @Target(METHOD)
 public @interface FieldGenerator {
 	/**
-	 * Name of the field to be generated and proxied
+	 * The ID of the field identifier that is responsible
+	 * for generating the field name
 	 * @return
 	 */
-	@Internal(id = "field_name")
-	public String fieldName();
+	@Internal(id = "field_name_identifier")
+	public String fieldNameIdentifier();
 }

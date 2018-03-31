@@ -6,5 +6,9 @@
 	"SomeClass_value": {
 		"desc": ["Ljava/lang/String;"],
 		"names": ["value"]
+	},
+	"generatedFieldName": {
+		"desc": ["unused"],
+		"names": ["someGeneratedFieldName"]
 	}
 }

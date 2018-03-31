@@ -22,13 +22,13 @@ import pr0x79.instrumentation.accessor.ClassAccessor;
 import pr0x79.instrumentation.accessor.ClassAccessorData;
 import pr0x79.instrumentation.accessor.IAccessor;
 import pr0x79.instrumentation.exception.InstrumentorException;
-import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.identification.Mappers;
 import pr0x79.instrumentation.signature.ClassHierarchy;
 
 public class Bootstrapper {
 	private static final Bootstrapper INSTANCE = new Bootstrapper();
 
-	private final Identifiers identifiers;
+	private final Mappers mappers;
 	private final Accessors accessors;
 	private final BytecodeInstrumentation instrumentor;
 
@@ -39,9 +39,9 @@ public class Bootstrapper {
 	private boolean initializing = true;
 
 	private Bootstrapper() {
-		this.identifiers = new Identifiers(this);
+		this.mappers = new Mappers(this);
 		this.instrumentor = new BytecodeInstrumentation(this.hierarchy);
-		this.accessors = new Accessors(this, this.identifiers, this.instrumentor);
+		this.accessors = new Accessors(this, this.mappers, this.instrumentor);
 		this.instrumentor.setAccessors(this.accessors);
 	}
 
@@ -201,11 +201,11 @@ public class Bootstrapper {
 	}
 
 	/**
-	 * Returns the identifier registry
+	 * Returns the mappers registry
 	 * @return
 	 */
-	public Identifiers getIdentifiers() {
-		return this.identifiers;
+	public Mappers getMappers() {
+		return this.mappers;
 	}
 
 	/**

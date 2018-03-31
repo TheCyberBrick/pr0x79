@@ -13,7 +13,7 @@ public class InstructionNotFoundException extends InstructionIdentifierException
 	private static final long serialVersionUID = -6301836443408809031L;
 
 	public InstructionNotFoundException(String accessor, MethodDescription method, String identifierId, IInstructionIdentifier identifier) {
-		super(String.format("Instruction identifier %s#%s:%s was unable to identify the instruction", accessor, method.getName() + method.getDescriptor(), identifierId), accessor, method, identifierId, identifier);
+		super(String.format("Instruction identifier %s#%s[%s] was unable to identify the instruction", accessor, method.getName() + method.getDescriptor(), identifierId), accessor, method, identifierId, identifier);
 	}
 
 	public InstructionNotFoundException(String msg, Exception exc, String accessor, MethodDescription method, String identifierId, IInstructionIdentifier identifier) {

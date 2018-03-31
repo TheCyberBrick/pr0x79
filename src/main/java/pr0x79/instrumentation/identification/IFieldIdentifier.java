@@ -8,7 +8,7 @@ import org.objectweb.asm.tree.FieldNode;
 import pr0x79.instrumentation.exception.InstrumentorException;
 
 /**
- * Identifies classes
+ * Identifies fields
  */
 public interface IFieldIdentifier {
 	public static final class FieldDescription {

@@ -15,7 +15,7 @@ public class LocalVarInstructionNotFoundException extends InstructionNotFoundExc
 	private final int param;
 
 	public LocalVarInstructionNotFoundException(int param, String accessor, MethodDescription method, String identifierId, IInstructionIdentifier identifier) {
-		this(String.format("Instruction identifier of @LocalVar for parameter %d of %s#%s:%s was unable to identify the the local variable", param, accessor, method.getName() + method.getDescriptor(), identifierId), null, param, accessor, method, identifierId, identifier);
+		this(String.format("Instruction identifier of @LocalVar for parameter %d of %s#%s[%s] was unable to identify the the local variable", param, accessor, method.getName() + method.getDescriptor(), identifierId), null, param, accessor, method, identifierId, identifier);
 	}
 
 	public LocalVarInstructionNotFoundException(String msg, Exception exc, int param, String accessor, MethodDescription method, String identifierId, IInstructionIdentifier identifier) {

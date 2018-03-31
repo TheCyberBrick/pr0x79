@@ -25,7 +25,8 @@ public interface ISomeClassAccessor extends IAccessor {
 	 * This method intercepts SomeClass#print(String) right at the beginning of the method and
 	 * sets the "input" parameter value to "intercepted input!"
 	 */
-	@Interceptor(methodIdentifier = "SomeClass_print", instructionIdentifier = "start")
+	@Interceptor(methodIdentifier = "SomeClass_print", instructionIdentifier = "start",
+			exitInstructionIdentifiers = {"first_return-1", "first_return-2"})
 	public default <BS extends ISomeClassAccessor> void interceptPrint(@LocalVar(instructionIdentifier = "local_var_1") String input, 
 			IInterceptorContext<Map<String, List<BS>>> context) {
 		System.out.println("\n--------Interception--------");
@@ -34,6 +35,8 @@ public interface ISomeClassAccessor extends IAccessor {
 		System.out.println("Changing parameter \"input\" to: \"intercepted input!\"");
 		input = "intercepted input!";
 		System.out.println("-----------------------------\n");
+		
+		//context.exitAt(0);
 		
 		//context.returnWith(null);
 	}
@@ -62,6 +65,6 @@ public interface ISomeClassAccessor extends IAccessor {
 	 * Mixin fields can be done with a getter and setter using @FieldGenerator.
 	 * Again, the names of the methods do not matter.
 	 */
-	@FieldGenerator(fieldName = "generatedFieldName") public void setGeneratedFieldValue(float value);
-	@FieldGenerator(fieldName = "generatedFieldName") public float getGeneratedFieldValue();
+	@FieldGenerator(fieldNameIdentifier = "generatedFieldName") public void setGeneratedFieldValue(float value);
+	@FieldGenerator(fieldNameIdentifier = "generatedFieldName") public float getGeneratedFieldValue();
 }

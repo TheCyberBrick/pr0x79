@@ -16,21 +16,22 @@ import pr0x79.Bootstrapper;
 import pr0x79.instrumentation.BytecodeInstrumentation;
 import pr0x79.instrumentation.exception.InstrumentorException;
 import pr0x79.instrumentation.identification.IClassIdentifier;
-import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.identification.Mappers;
+import pr0x79.instrumentation.identification.Mappers.ClassSearchType;
 
 /**
  * Registry for accessors
  */
 public final class Accessors {
 	private final Bootstrapper bootstrapper;
-	private final Identifiers identifiers;
+	private final Mappers mappers;
 	private final BytecodeInstrumentation instrumentor;
 	private final Map<String, List<ClassAccessorData>> accessorsById = new ConcurrentHashMap<>();
 	private final Map<String, ClassAccessorData> accessorsByClassName = new ConcurrentHashMap<>();
 
-	public Accessors(Bootstrapper bootstrapper, Identifiers identifiers, BytecodeInstrumentation instrumentor) {
+	public Accessors(Bootstrapper bootstrapper, Mappers mappers, BytecodeInstrumentation instrumentor) {
 		this.bootstrapper = bootstrapper;
-		this.identifiers = identifiers;
+		this.mappers = mappers;
 		this.instrumentor = instrumentor;
 	}
 
@@ -64,13 +65,13 @@ public final class Accessors {
 
 		IClassIdentifier clsIdentifier = null;
 		if(classIdentifierId != null) {
-			clsIdentifier = this.identifiers.getClassIdentifier(classIdentifierId);
+			clsIdentifier = this.mappers.getClassIdentifier(classIdentifierId, ClassSearchType.ACCESSOR);
 		}
 		if(clsIdentifier == null) {
-			throw new InstrumentorException(String.format("Class identifier %s:%s is not registered", className, classIdentifierId));
+			throw new InstrumentorException(String.format("Class identifier %s[%s] is not mapped", className, classIdentifierId));
 		}
 
-		ClassAccessorData accessorData = new ClassAccessorData(classIdentifierId, this.identifiers, className, clsNode, clsIdentifier, this.instrumentor);
+		ClassAccessorData accessorData = new ClassAccessorData(classIdentifierId, this.mappers, className, clsNode, clsIdentifier, this.instrumentor);
 		List<ClassAccessorData> accessors = this.accessorsById.get(classIdentifierId);
 		if(accessors == null) {
 			this.accessorsById.put(classIdentifierId, accessors = new ArrayList<>());

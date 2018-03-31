@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import javax.lang.model.SourceVersion;
+
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AnnotationNode;
@@ -17,9 +19,12 @@ import pr0x79.instrumentation.exception.accessor.method.InvalidMethodModifierExc
 import pr0x79.instrumentation.exception.accessor.method.InvalidReturnTypeException;
 import pr0x79.instrumentation.identification.IClassIdentifier;
 import pr0x79.instrumentation.identification.IFieldIdentifier;
+import pr0x79.instrumentation.identification.IFieldIdentifier.FieldDescription;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier.MethodDescription;
-import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.identification.Mappers;
+import pr0x79.instrumentation.identification.Mappers.FieldSearchType;
+import pr0x79.instrumentation.identification.Mappers.MethodSearchType;
 import pr0x79.instrumentation.signature.SignatureParser;
 import pr0x79.instrumentation.signature.SignatureParser.Signature;
 import pr0x79.instrumentation.signature.SignatureParser.TypeSymbol;
@@ -37,7 +42,7 @@ public final class ClassAccessorData {
 	private final List<FieldGeneratorData> fieldGenerators = new ArrayList<>();
 	private final List<MethodInterceptorData> methodInterceptors = new ArrayList<>();
 
-	ClassAccessorData(String identifierId, Identifiers identifiers, String accessorClass, ClassNode clsNode, IClassIdentifier classIdentifier, BytecodeInstrumentation instrumentor) {
+	ClassAccessorData(String identifierId, Mappers mappers, String accessorClass, ClassNode clsNode, IClassIdentifier classIdentifier, BytecodeInstrumentation instrumentor) {
 		this.identifierId = identifierId;
 		this.accessorClass = accessorClass;
 		this.classIdentifier = classIdentifier;
@@ -45,10 +50,10 @@ public final class ClassAccessorData {
 		for(MethodNode method : clsNode.methods) {
 			boolean isAccessorOrInterceptor = false;
 
-			isAccessorOrInterceptor |= this.identifyMethodAccessor(method, identifiers);
-			isAccessorOrInterceptor |= this.identifyFieldAccessor(method, identifiers);
-			isAccessorOrInterceptor |= this.identifyFieldGenerator(method, identifiers);
-			isAccessorOrInterceptor |= this.identifyMethodInterceptor(method, identifiers, clsNode.name, identifierId);
+			isAccessorOrInterceptor |= this.identifyMethodAccessor(method, mappers);
+			isAccessorOrInterceptor |= this.identifyFieldAccessor(method, mappers);
+			isAccessorOrInterceptor |= this.identifyFieldGenerator(method, mappers);
+			isAccessorOrInterceptor |= this.identifyMethodInterceptor(method, mappers, clsNode.name, identifierId);
 
 			if(!isAccessorOrInterceptor && (method.access & Opcodes.ACC_ABSTRACT) != 0 && (method.access & Opcodes.ACC_STATIC) == 0) {
 				throw new InstrumentorException(String.format("Class accessor %s has an abstract method: %s", accessorClass, method.name + method.desc));
@@ -59,10 +64,10 @@ public final class ClassAccessorData {
 	/**
 	 * Identifies and validates a method accessor
 	 * @param method
-	 * @param identifiers
+	 * @param mappers
 	 * @return
 	 */
-	private boolean identifyMethodAccessor(MethodNode method, Identifiers identifiers) {
+	private boolean identifyMethodAccessor(MethodNode method, Mappers mappers) {
 		String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, BytecodeInstrumentation.getInternalMethod(MethodAccessor.class, "method_identifier").getName(), String.class, null);
 		if(methodIdentifierId != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
@@ -71,9 +76,9 @@ public final class ClassAccessorData {
 			if((method.access & Opcodes.ACC_STATIC) != 0) {
 				throw new InstrumentorException(String.format("Method accessor %s#%s is a static method", accessorClass, method.name + method.desc));
 			}
-			IMethodIdentifier methodIdentifier = identifiers.getMethodIdentifier(methodIdentifierId);
+			IMethodIdentifier methodIdentifier = mappers.getMethodIdentifier(methodIdentifierId, MethodSearchType.ACCESSOR);
 			if(methodIdentifier == null) {
-				throw new InstrumentorException(String.format("Method identifier %s:%s is not registered", accessorClass, methodIdentifierId));
+				throw new InstrumentorException(String.format("Method identifier %s[%s] is not mapped", accessorClass, methodIdentifierId));
 			}
 			this.methodAccessors.add(new MethodAccessorData(methodIdentifierId, method, methodIdentifier));
 			return true;
@@ -84,12 +89,12 @@ public final class ClassAccessorData {
 	/**
 	 * Identifies and validates a method interceptor
 	 * @param method
-	 * @param identifiers
+	 * @param mappers
 	 * @param className
 	 * @param classIdentifierId
 	 * @return
 	 */
-	private boolean identifyMethodInterceptor(MethodNode method, Identifiers identifiers, String className, String classIdentifierId) {
+	private boolean identifyMethodInterceptor(MethodNode method, Mappers mappers, String className, String classIdentifierId) {
 		AnnotationNode interceptorAnnotation = null;
 
 		if(method.visibleAnnotations != null) {
@@ -116,7 +121,7 @@ public final class ClassAccessorData {
 			for(int i = 0; i < params.length; i++) {
 				if(params[i].getClassName().equals(IInterceptorContext.class.getName())) {
 					if(contextParam >= 0) {
-						throw new InstrumentorException(String.format("Method interceptor %s#%s has multiple InterceptorContext parameters", className, method.name + method.desc));
+						throw new InstrumentorException(String.format("Method interceptor %s#%s has multiple IInterceptorContext parameters", className, method.name + method.desc));
 					}
 					contextParam = i;
 
@@ -144,7 +149,7 @@ public final class ClassAccessorData {
 					}
 				}
 				if(localVarAnnotation == null) {
-					throw new InstrumentorException(String.format("Parameter %d for method interceptor %s#%s does not have an @LocalVar annotation", i, className, method.name + method.desc));
+					throw new InstrumentorException(String.format("Parameter %d for method interceptor %s#%s does not have an @LocalVar annotation and is not IInterceptorContext", i, className, method.name + method.desc));
 				}
 				String instructionIdentifierId = BytecodeInstrumentation.getAnnotationValue(localVarAnnotation, BytecodeInstrumentation.getInternalMethod(LocalVar.class, "instruction_identifier").getName(), String.class);
 				if(instructionIdentifierId == null) {
@@ -155,7 +160,7 @@ public final class ClassAccessorData {
 			}
 
 			if(contextParam < 0) {
-				throw new InstrumentorException(String.format("Method interceptor %s#%s has no InterceptorContext parameter", className, method.name + method.desc));
+				throw new InstrumentorException(String.format("Method interceptor %s#%s has no IInterceptorContext parameter", className, method.name + method.desc));
 			}
 
 			String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(interceptorAnnotation, BytecodeInstrumentation.getInternalMethod(Interceptor.class, "method_identifier").getName(), String.class);
@@ -177,7 +182,7 @@ public final class ClassAccessorData {
 					exitInstructionIdentifierIds, Type.getObjectType(className).getClassName(), 
 					method.name, method.desc, method.signature, methodLocalVars, contextParam,
 					contextSig);
-			methodInterceptor.initIdentifiers(identifiers);
+			methodInterceptor.initIdentifiers(mappers);
 			this.methodInterceptors.add(methodInterceptor);
 
 			return true;
@@ -188,10 +193,10 @@ public final class ClassAccessorData {
 	/**
 	 * Identifies and validates a field accessor
 	 * @param method
-	 * @param identifiers
+	 * @param mappers
 	 * @return
 	 */
-	private boolean identifyFieldAccessor(MethodNode method, Identifiers identifiers) {
+	private boolean identifyFieldAccessor(MethodNode method, Mappers mappers) {
 		String fieldIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldAccessor.class, BytecodeInstrumentation.getInternalMethod(FieldAccessor.class, "field_identifier").getName(), String.class, null);
 		if(fieldIdentifierId != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
@@ -203,9 +208,9 @@ public final class ClassAccessorData {
 			if(method.exceptions.size() > 0) {
 				throw new InstrumentorException(String.format("Field accessor %s#%s throws Exceptions", accessorClass, method.name + method.desc));
 			}
-			IFieldIdentifier fieldIdentifier = identifiers.getFieldIdentifier(fieldIdentifierId);
+			IFieldIdentifier fieldIdentifier = mappers.getFieldIdentifier(fieldIdentifierId, FieldSearchType.ACCESSOR);
 			if(fieldIdentifier == null) {
-				throw new InstrumentorException(String.format("Field identifier %s:%s is not registered", accessorClass, fieldIdentifierId));
+				throw new InstrumentorException(String.format("Field identifier %s#%s[%s] is not mapped", accessorClass, method.name + method.desc, fieldIdentifierId));
 			}
 			Type[] params = Type.getArgumentTypes(method.desc);
 			Type returnType = Type.getReturnType(method.desc);
@@ -228,12 +233,12 @@ public final class ClassAccessorData {
 	/**
 	 * Identifies and validates a field generator
 	 * @param method
-	 * @param identifiers
+	 * @param mappers
 	 * @return
 	 */
-	private boolean identifyFieldGenerator(MethodNode method, Identifiers identifiers) {
-		String fieldGeneratorField = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldGenerator.class, BytecodeInstrumentation.getInternalMethod(FieldGenerator.class, "field_name").getName(), String.class, null);
-		if(fieldGeneratorField != null) {
+	private boolean identifyFieldGenerator(MethodNode method, Mappers mappers) {
+		String fieldNameIdentifier = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldGenerator.class, BytecodeInstrumentation.getInternalMethod(FieldGenerator.class, "field_name_identifier").getName(), String.class, null);
+		if(fieldNameIdentifier != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Field generator %s#%s is a default method", accessorClass, method.name + method.desc));
 			}
@@ -242,6 +247,24 @@ public final class ClassAccessorData {
 			}
 			if(method.exceptions.size() > 0) {
 				throw new InstrumentorException(String.format("Field generator %s#%s throws Exceptions", accessorClass, method.name + method.desc));
+			}
+			IFieldIdentifier identifier = mappers.getFieldIdentifier(fieldNameIdentifier, FieldSearchType.NAME_GENERATOR);
+			if(identifier == null) {
+				throw new InstrumentorException(String.format("Field name identifier %s#%s[%s] is not mapped", accessorClass, method.name + method.desc, fieldNameIdentifier));
+			}
+			if(!identifier.isStatic()) {
+				throw new InstrumentorException(String.format("Field name identifier %s#%s[%s] is not static", accessorClass, method.name + method.desc, fieldNameIdentifier));
+			}
+			FieldDescription[] fieldDescriptions = identifier.getFields();
+			if(fieldDescriptions.length == 0) {
+				throw new InstrumentorException(String.format("Field name identifier %s#%s[%s] did not return any field", accessorClass, method.name + method.desc, fieldNameIdentifier));
+			}
+			if(fieldDescriptions.length > 1) {
+				throw new InstrumentorException(String.format("Field name identifier %s#%s[%s] returned more than one field", accessorClass, method.name + method.desc, fieldNameIdentifier));
+			}
+			String fieldName = fieldDescriptions[0].getName();
+			if(!SourceVersion.isName(fieldName)) {
+				throw new InstrumentorException(String.format("Field name identifier %s#%s[%s] returned an invalid field name: %s", accessorClass, method.name + method.desc, fieldNameIdentifier, fieldName));
 			}
 			Type[] params = Type.getArgumentTypes(method.desc);
 			Type returnType = Type.getReturnType(method.desc);
@@ -252,9 +275,9 @@ public final class ClassAccessorData {
 				if(returnType.getSort() != Type.VOID && !returnType.getClassName().equals(accessorClass) && !returnType.getClassName().equals(params[0].getClassName())) {
 					throw new InstrumentorException(String.format("Field generator (setter?) %s#%s does not have return type void, %s or %s", accessorClass, method.name + method.desc, accessorClass, params[0].getClassName()));
 				}
-				this.fieldGenerators.add(new FieldGeneratorData(fieldGeneratorField, params[0], true, method));
+				this.fieldGenerators.add(new FieldGeneratorData(fieldName, params[0], true, method));
 			} else {
-				this.fieldGenerators.add(new FieldGeneratorData(fieldGeneratorField, returnType, false, method));
+				this.fieldGenerators.add(new FieldGeneratorData(fieldName, returnType, false, method));
 			}
 			return true;
 		}

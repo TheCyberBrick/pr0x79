@@ -5,12 +5,14 @@ import java.util.List;
 
 import pr0x79.instrumentation.Internal;
 import pr0x79.instrumentation.exception.InstrumentorException;
-import pr0x79.instrumentation.exception.InvalidExitException;
 import pr0x79.instrumentation.identification.IClassIdentifier;
 import pr0x79.instrumentation.identification.IInstructionIdentifier;
 import pr0x79.instrumentation.identification.IInstructionIdentifier.InstructionType;
+import pr0x79.instrumentation.identification.Mappers.ClassSearchType;
+import pr0x79.instrumentation.identification.Mappers.InstructionSearchType;
+import pr0x79.instrumentation.identification.Mappers.MethodSearchType;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
-import pr0x79.instrumentation.identification.Identifiers;
+import pr0x79.instrumentation.identification.Mappers;
 import pr0x79.instrumentation.signature.SignatureParser.TypeSymbol;
 
 public final class MethodInterceptorData {
@@ -163,82 +165,62 @@ public final class MethodInterceptorData {
 
 	/**
 	 * Initializes the identifiers
-	 * @param identifiers
+	 * @param mappers
 	 */
-	public void initIdentifiers(Identifiers identifiers) {
-		this.classIdentifier = identifiers.getClassIdentifier(this.classIdentifierId);
+	public void initIdentifiers(Mappers mappers) {
+		this.classIdentifier = mappers.getClassIdentifier(this.classIdentifierId, ClassSearchType.ACCESSOR);
 		if(this.classIdentifier == null) {
-			throw new InstrumentorException(String.format("Class identifier %s:%s is not registered", this.accessorClass, this.classIdentifierId));
+			throw new InstrumentorException(String.format("Class identifier %s[%s] is not mapped", this.accessorClass, this.classIdentifierId));
 		}
-		this.methodIdentifier = identifiers.getMethodIdentifier(this.methodIdentifierId);
+		this.methodIdentifier = mappers.getMethodIdentifier(this.methodIdentifierId, MethodSearchType.INTERCEPTOR);
 		if(this.methodIdentifier == null) {
-			throw new InstrumentorException(String.format("Method identifier %s for interceptor %s#%s is not registered", this.methodIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+			throw new InstrumentorException(String.format("Method identifier %s#%s[%s] is not mapped", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, this.methodIdentifierId));
 		}
-		this.instructionIdentifier = identifiers.getInstructionIdentifier(this.instructionIdentifierId);
+		this.instructionIdentifier = mappers.getInstructionIdentifier(this.instructionIdentifierId, InstructionSearchType.INTERCEPTOR_ENTRY);
 		if(this.instructionIdentifier == null) {
-			throw new InstrumentorException(String.format("Instruction identifier %s for interceptor %s#%s is not registered", this.instructionIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+			throw new InstrumentorException(String.format("Instruction identifier %s#%s[%s] is not mapped", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, this.instructionIdentifierId));
 		}
 		if(this.instructionIdentifier.getType() != InstructionType.INSTRUCTION) {
-			throw new InstrumentorException(String.format("Instruction identifier %s for interceptor %s#%s is not of type INSTRUCTION", this.instructionIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+			throw new InstrumentorException(String.format("Instruction identifier %s#%s[%s] is not of type INSTRUCTION", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, this.instructionIdentifierId));
 		}
 		this.exitInstructionIdentifiers = new IInstructionIdentifier[this.getExitInstructionIdentifierIds().length];
 		int i = 0;
 		for(String exitInstructionIdentifierId : this.exitInstructionIdentifierIds) {
-			this.exitInstructionIdentifiers[i] = identifiers.getInstructionIdentifier(exitInstructionIdentifierId);
+			this.exitInstructionIdentifiers[i] = mappers.getInstructionIdentifier(exitInstructionIdentifierId, InstructionSearchType.INTERCEPTOR_EXIT);
 			if(this.exitInstructionIdentifiers[i] == null) {
-				throw new InstrumentorException(String.format("Exit instruction identifier %s for interceptor %s#%s is not registered", exitInstructionIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+				throw new InstrumentorException(String.format("Exit instruction identifier %s#%s[%s] is not mapped", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, exitInstructionIdentifierId));
 			}
 			if(this.exitInstructionIdentifiers[i].getType() != InstructionType.INSTRUCTION) {
-				throw new InstrumentorException(String.format("Exit instruction identifier %s for interceptor %s#%s is not of type INSTRUCTION", exitInstructionIdentifierId, this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc));
+				throw new InstrumentorException(String.format("Exit instruction identifier %s#%s[%s] is not of type INSTRUCTION", this.accessorClass, this.interceptorMethod + this.interceptorMethodDesc, exitInstructionIdentifierId));
 			}
 			i++;
 		}
 		for(LocalVarData localVar : this.localVars) {
-			localVar.initIdentifiers(identifiers);
+			localVar.initIdentifier(mappers);
 		}
-	}
-
-	@Internal(id = "create_interceptor_context")
-	public static IInterceptorContext<Object> createInterceptorContext(int params) {
-		return new InterceptorContext(params);
-	}
-
-	@Internal(id = "check_exit")
-	public static boolean checkExit(int exit, int exits) {
-		if(exit == IInterceptorContext.DO_NOT_EXIT) {
-			return false;
-		} else if(exit >= 0 && exit < exits) {
-			return true;
-		}
-		throw new InvalidExitException(String.format("Interceptor returned with invalid exit %d", exit));
-	}
-
-	@Internal(id = "check_return")
-	public static boolean checkReturn(Object val) {
-		return val != IInterceptorContext.DO_NOT_RETURN;
 	}
 
 	public static final class InterceptorContext implements IInterceptorContext<Object> {
 		private final Object[] params;
-		private int exit = DO_NOT_EXIT;
-		private Object returnVal = DO_NOT_RETURN;
+		private int exit;
+		private Object returnVal;
+		private boolean returning = false;
+		private boolean exiting = false;
 
-		private InterceptorContext(int params) {
+		@Internal(id = "ctor")
+		public InterceptorContext(int params) {
 			this.params = new Object[params];
 		}
 
 		@Override
 		public void exitAt(int index) {
-			if(index >= 0) {
-				this.exit = index;
-			} else {
-				this.exit = DO_NOT_EXIT;
-			}
+			this.exit = index;
+			this.exiting = true;
 		}
 
 		@Override
 		public void cancelExit() {
-			this.exit = DO_NOT_EXIT;
+			this.exiting = false;
 		}
 
 		@Override
@@ -247,18 +229,29 @@ public final class MethodInterceptorData {
 		}
 
 		@Override
+		public boolean isExiting() {
+			return this.exiting;
+		}
+
+		@Override
 		public void returnWith(Object obj) {
 			this.returnVal = obj;
+			this.returning = true;
 		}
 
 		@Override
 		public void cancelReturn() {
-			this.returnVal = DO_NOT_RETURN;
+			this.returning = false;
 		}
 
 		@Override
 		public Object getReturn() {
 			return this.returnVal;
+		}
+
+		@Override
+		public boolean isReturning() {
+			return this.returning;
 		}
 
 		@Override

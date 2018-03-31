@@ -25,16 +25,16 @@ public class Instrumentor implements IInstrumentor {
 		JsonParser parser = new JsonParser();
 
 		JsonElement classMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/class_mappings.json"))));
-		MappingsParser.parseClassIdentifiers(classMappingsJson.getAsJsonObject(), bootstrapper.getIdentifiers());
+		MappingsParser.parseClassIdentifiers(classMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
 
 		JsonElement fieldMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/field_mappings.json"))));
-		MappingsParser.parseFieldIdentifiers(fieldMappingsJson.getAsJsonObject(), bootstrapper.getIdentifiers());
+		MappingsParser.parseFieldIdentifiers(fieldMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
 
 		JsonElement methodMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/method_mappings.json"))));
-		MappingsParser.parseMethodIdentifiers(methodMappingsJson.getAsJsonObject(), bootstrapper.getIdentifiers());
+		MappingsParser.parseMethodIdentifiers(methodMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
 
 		JsonElement instructionMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/instruction_mappings.json"))));
-		MappingsParser.parseInstructionIdentifiers(instructionMappingsJson.getAsJsonObject(), bootstrapper.getIdentifiers());
+		MappingsParser.parseInstructionIdentifiers(instructionMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
 
 
 		System.out.println("Registering accessors\n");
