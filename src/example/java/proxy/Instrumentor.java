@@ -1,6 +1,8 @@
 package proxy;
 
 import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -8,6 +10,10 @@ import com.google.gson.stream.JsonReader;
 
 import pr0x79.Bootstrapper;
 import pr0x79.IInstrumentor;
+import pr0x79.instrumentation.identification.IClassIdentifier;
+import pr0x79.instrumentation.identification.IFieldIdentifier;
+import pr0x79.instrumentation.identification.IInstructionIdentifier;
+import pr0x79.instrumentation.identification.IMethodIdentifier;
 import proxy.mappings.MappingsParser;
 
 public class Instrumentor implements IInstrumentor {
@@ -25,22 +31,29 @@ public class Instrumentor implements IInstrumentor {
 		JsonParser parser = new JsonParser();
 
 		JsonElement classMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/class_mappings.json"))));
-		MappingsParser.parseClassIdentifiers(classMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
+		Map<String, IClassIdentifier> classIdentifiers = new HashMap<>();
+		MappingsParser.parseClassIdentifiers(classMappingsJson.getAsJsonObject(), classIdentifiers);
+		bootstrapper.getMappers().registerClassMapper("json", (identifier, type) -> classIdentifiers.get(identifier));
 
 		JsonElement fieldMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/field_mappings.json"))));
-		MappingsParser.parseFieldIdentifiers(fieldMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
+		Map<String, IFieldIdentifier> fieldIdentifiers = new HashMap<>();
+		MappingsParser.parseFieldIdentifiers(fieldMappingsJson.getAsJsonObject(), fieldIdentifiers);
+		bootstrapper.getMappers().registerFieldMapper("json", (identifier, type) -> fieldIdentifiers.get(identifier));
 
 		JsonElement methodMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/method_mappings.json"))));
-		MappingsParser.parseMethodIdentifiers(methodMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
+		Map<String, IMethodIdentifier> methodIdentifiers = new HashMap<>();
+		MappingsParser.parseMethodIdentifiers(methodMappingsJson.getAsJsonObject(), methodIdentifiers);
+		bootstrapper.getMappers().registerMethodMapper("json", (identifier, type) -> methodIdentifiers.get(identifier));
 
 		JsonElement instructionMappingsJson = parser.parse(new JsonReader(new InputStreamReader(this.getClass().getResourceAsStream("/mappings/instruction_mappings.json"))));
-		MappingsParser.parseInstructionIdentifiers(instructionMappingsJson.getAsJsonObject(), bootstrapper.getMappers());
-
+		Map<String, IInstructionIdentifier> instructionIdentifier = new HashMap<>();
+		MappingsParser.parseInstructionIdentifiers(instructionMappingsJson.getAsJsonObject(), instructionIdentifier);
+		bootstrapper.getMappers().registerInstructionMapper("json", (identifier, type) -> instructionIdentifier.get(identifier));
 
 		System.out.println("Registering accessors\n");
 
 		//The accessor interfaces are registered here. Their classes must _not_ be loaded before or during initBootstrapper
-		
+
 		bootstrapper.getAccessors().registerAccessor("proxy.accessors.IMainAccessor");
 		bootstrapper.getAccessors().registerAccessor("proxy.accessors.ISomeClassAccessor");
 	}

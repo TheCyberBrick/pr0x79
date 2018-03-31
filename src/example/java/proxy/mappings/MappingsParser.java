@@ -2,6 +2,7 @@ package proxy.mappings;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import com.google.gson.JsonArray;
@@ -12,7 +13,6 @@ import pr0x79.instrumentation.identification.IClassIdentifier;
 import pr0x79.instrumentation.identification.IFieldIdentifier;
 import pr0x79.instrumentation.identification.IInstructionIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
-import pr0x79.instrumentation.identification.Mappers;
 import proxy.identifiers.IndexInstructionIdentifier;
 import proxy.identifiers.IndexLocalVariableIdentifier;
 import proxy.identifiers.MethodCallInstructionIdentifier;
@@ -23,14 +23,12 @@ import proxy.identifiers.StringLocalVariableIdentifier;
 import proxy.identifiers.StringMethodIdentifier;
 
 public class MappingsParser {
-	//TODO Fix this up with the new mappers
-	
 	/**
 	 * Parses a json object into {@link IClassIdentifier}s and registers them
 	 * @param json
-	 * @param mappers
+	 * @param map
 	 */
-	public static void parseClassIdentifiers(JsonObject json, Mappers mappers) {
+	public static void parseClassIdentifiers(JsonObject json, Map<String, IClassIdentifier> map) {
 		for(Entry<String, JsonElement> entry : json.entrySet()) {
 			JsonObject entryJson = entry.getValue().getAsJsonObject();
 			JsonArray values = entryJson.get("names").getAsJsonArray();
@@ -38,16 +36,16 @@ public class MappingsParser {
 			for(JsonElement e : values) {
 				mappedNames.add(e.getAsString());
 			}
-			mappers.registerClassMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new StringClassIdentifier(mappedNames) : null);
+			map.put(entry.getKey(), new StringClassIdentifier(mappedNames));
 		}
 	}
 
 	/**
 	 * Parses a json object into {@link IFieldIdentifier}s and registers them
 	 * @param json
-	 * @param mappers
+	 * @param map
 	 */
-	public static void parseFieldIdentifiers(JsonObject json, Mappers mappers) {
+	public static void parseFieldIdentifiers(JsonObject json, Map<String, IFieldIdentifier> map) {
 		for(Entry<String, JsonElement> entry : json.entrySet()) {
 			JsonObject entryJson = entry.getValue().getAsJsonObject();
 			JsonArray desc = entryJson.get("desc").getAsJsonArray();
@@ -60,16 +58,16 @@ public class MappingsParser {
 			for(JsonElement e : values) {
 				mappedFieldNames.add(e.getAsString());
 			}
-			mappers.registerFieldMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new StringFieldIdentifier(mappedFieldNames, mappedDescs) : null);
+			map.put(entry.getKey(), new StringFieldIdentifier(mappedFieldNames, mappedDescs));
 		}
 	}
 
 	/**
 	 * Parses a json object into {@link IMethodIdentifier}s and registers them
 	 * @param json
-	 * @param mappers
+	 * @param map
 	 */
-	public static void parseMethodIdentifiers(JsonObject json, Mappers mappers) {
+	public static void parseMethodIdentifiers(JsonObject json, Map<String, IMethodIdentifier> map) {
 		for(Entry<String, JsonElement> entry : json.entrySet()) {
 			JsonObject entryJson = entry.getValue().getAsJsonObject();
 			JsonArray descs = entryJson.get("desc").getAsJsonArray();
@@ -82,16 +80,16 @@ public class MappingsParser {
 			for(JsonElement e : values) {
 				mappedNames.add(e.getAsString());
 			}
-			mappers.registerMethodMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new StringMethodIdentifier(mappedNames, mappedDescs) : null);
+			map.put(entry.getKey(), new StringMethodIdentifier(mappedNames, mappedDescs));
 		}
 	}
 
 	/**
 	 * Parses a json object into {@link IInstructionIdentifier}s and registers them
 	 * @param json
-	 * @param mappers
+	 * @param map
 	 */
-	public static void parseInstructionIdentifiers(JsonObject json, Mappers mappers) {
+	public static void parseInstructionIdentifiers(JsonObject json, Map<String, IInstructionIdentifier> map) {
 		for(Entry<String, JsonElement> entry : json.entrySet()) {
 			JsonObject entryJson = entry.getValue().getAsJsonObject();
 			String type = entryJson.get("type").getAsString().toLowerCase();
@@ -102,17 +100,17 @@ public class MappingsParser {
 				case "index": {
 					final boolean reversed = entryJson.has("reversed") && entryJson.get("reversed").getAsBoolean();
 					int index = entryJson.get("index").getAsInt();
-					mappers.registerInstructionMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new IndexInstructionIdentifier(index, reversed) : null);
+					map.put(entry.getKey(), new IndexInstructionIdentifier(index, reversed));
 					break;
 				}
 				case "first_return": {
 					final int offset = entryJson.has("offset") ? entryJson.get("offset").getAsInt() : 0;
-					mappers.registerInstructionMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new ReturnInstructionIdentifier(offset, false) : null);
+					map.put(entry.getKey(), new ReturnInstructionIdentifier(offset, false));
 					break;
 				}
 				case "last_return": {
 					final int offset = entryJson.has("offset") ? entryJson.get("offset").getAsInt() : 0;
-					mappers.registerInstructionMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new ReturnInstructionIdentifier(offset, true) : null);
+					map.put(entry.getKey(), new ReturnInstructionIdentifier(offset, true));
 					break;
 				}
 				case "method_call": {
@@ -132,7 +130,7 @@ public class MappingsParser {
 					for(JsonElement e : owners) {
 						mappedOwners.add(e.getAsString());
 					}
-					mappers.registerInstructionMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new MethodCallInstructionIdentifier(mappedOwners, mappedNames, mappedDescs, before) : null);
+					map.put(entry.getKey(), new MethodCallInstructionIdentifier(mappedOwners, mappedNames, mappedDescs, before));
 					break;
 				}
 				default:
@@ -149,12 +147,12 @@ public class MappingsParser {
 					for(JsonElement e : values) {
 						mappedNames.add(e.getAsString());
 					}
-					mappers.registerInstructionMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new StringLocalVariableIdentifier(mappedNames) : null);
+					map.put(entry.getKey(), new StringLocalVariableIdentifier(mappedNames));
 					break;
 				case "index":
 					final boolean reversed = entryJson.has("reversed") ? entryJson.get("reversed").getAsBoolean() : false;
 					int index = entryJson.get("index").getAsInt();
-					mappers.registerInstructionMapper(entry.getKey(), (str, search) -> str.equals(entry.getKey()) ? new IndexLocalVariableIdentifier(index, reversed) : null);
+					map.put(entry.getKey(), new IndexLocalVariableIdentifier(index, reversed));
 					break;
 				default:
 					throw new RuntimeException("Invalid identification type");
