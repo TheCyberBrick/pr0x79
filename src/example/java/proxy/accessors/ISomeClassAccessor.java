@@ -11,6 +11,9 @@ import pr0x79.instrumentation.accessor.IInterceptorContext;
 import pr0x79.instrumentation.accessor.Interceptor;
 import pr0x79.instrumentation.accessor.LocalVar;
 import pr0x79.instrumentation.accessor.MethodAccessor;
+import program.Main;
+import program.Main.MainSub;
+import proxy.Instrumentor;
 
 @ClassAccessor(classIdentifier = "SomeClass")
 public interface ISomeClassAccessor extends IAccessor {
@@ -27,17 +30,24 @@ public interface ISomeClassAccessor extends IAccessor {
 	 */
 	@Interceptor(methodIdentifier = "SomeClass_print", instructionIdentifier = "start",
 			exitInstructionIdentifiers = {"first_return-1", "first_return-2"})
-	public default <BS extends ISomeClassAccessor> void interceptPrint(@LocalVar(instructionIdentifier = "local_var_1") String input, 
-			IInterceptorContext<Map<String, List<BS>>> context) {
+	public default 
+
+	<M extends Main<M>> 
+
+	void interceptPrint(@LocalVar(instructionIdentifier = "local_var_1") String input, 
+
+			IInterceptorContext<Map<String, List<? extends M>>> 
+
+	context) {
 		System.out.println("\n--------Interception--------");
 		System.out.println("SomeClass#print(String) intercepted!");
 		System.out.println("Parameter \"input\" is: " + input);
 		System.out.println("Changing parameter \"input\" to: \"intercepted input!\"");
 		input = "intercepted input!";
 		System.out.println("-----------------------------\n");
-		
+
 		//context.exitAt(0);
-		
+
 		//context.returnWith(null);
 	}
 

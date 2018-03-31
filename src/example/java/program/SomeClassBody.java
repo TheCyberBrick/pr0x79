@@ -1,13 +1,11 @@
 package program;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import proxy.Instrumentor;
-import proxy.accessors.IMainAccessor;
+import pr0x79.instrumentation.accessor.IAccessor;
 
-public class SomeClassBody<G extends Main & IMainAccessor, K extends Instrumentor> extends SigTestCls<G> {
+public class SomeClassBody extends SigTestCls {
 	public SomeClass create(String val) {
 		return new SomeClass(val);
 	}
@@ -16,18 +14,23 @@ public class SomeClassBody<G extends Main & IMainAccessor, K extends Instrumento
 
 	}
 
-	public class SomeClass<G extends Main & IMainAccessor & TestIntfs<K>> {
+	public class SomeClass {
 		private String value;
 
 		public SomeClass(String value) {
 			this.value = value;
 		}
 
-		class Test {
+		class Test extends SomeClass implements TestIntfs {
+
+			public Test(SomeClassBody someClassBody, String value) {
+				someClassBody.super(value);
+				// TODO Auto-generated constructor stub
+			}
 			
 		}
 		
-		public <A extends G, T extends Main & TestIntfs<G> & IMainAccessor, F extends TestIntfs<ArrayList<? super G>>, Agent> Map<Agent[], List<? extends T>> print(String input) {
+		public <M extends Main<M>> Map<String, List<? extends M>> print(String input) {
 			System.out.println("Running SomeClass#print(String)");
 			System.out.println("Input: " + input);
 			System.out.println("Value: " + this.value);

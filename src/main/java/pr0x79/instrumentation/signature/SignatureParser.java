@@ -492,6 +492,61 @@ public class SignatureParser {
 				itf.traverseDFS(consumer);
 			}
 		}
+
+		@Override
+		public String toString() {
+			StringBuilder sb = new StringBuilder();
+
+			boolean isClassSig = !this.interfaces.isEmpty() || this.superclass != null;
+
+			if(isClassSig) {
+				sb.append("Class");
+			}
+
+			if(!this.formalTypeParameters.isEmpty()) {
+				sb.append("<");
+				StringJoiner joiner = new StringJoiner(", ");
+				for(FormalTypeParameterSymbol formalParam : this.formalTypeParameters) {
+					joiner.add(formalParam.toString());
+				}
+				sb.append(joiner.toString());
+				sb.append("> ");
+			}
+
+			if(isClassSig) {
+				if(this.superclass != null) {
+					sb.append("extends ");
+					sb.append(this.superclass.toString());
+				}
+				if(!this.interfaces.isEmpty()) {
+					sb.append("implements ");
+					StringJoiner joiner = new StringJoiner(", ");
+					for(TypeSymbol itf : this.interfaces) {
+						joiner.add(itf.toString());
+					}
+					sb.append(joiner.toString());
+				}
+			} else {
+				sb.append(this.returnType.toString());
+				sb.append(" method(");
+				StringJoiner joiner = new StringJoiner(", ");
+				for(TypeSymbol param : this.parameters) {
+					joiner.add(param.toString());
+				}
+				sb.append(joiner.toString());
+				sb.append(")");
+				if(!this.exceptions.isEmpty()) {
+					sb.append(" throws ");
+					joiner = new StringJoiner(", ");
+					for(TypeSymbol excp : this.exceptions) {
+						joiner.add(excp.toString());
+					}
+					sb.append(joiner.toString());
+				}
+			}
+
+			return sb.toString();
+		}
 	}
 
 	public static class SignatureParserVisitor extends SignatureVisitor {

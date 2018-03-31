@@ -9,34 +9,32 @@ import pr0x79.instrumentation.signature.ClassHierarchy.ClassData;
 public class ClassRelationResolver {
 	private final ClassLoader loader;
 	private final ClassHierarchy hierarchy;
-	private final String name;
 
 	/**
 	 * Creates a new class relation resolver
 	 * @param hierarchy The class hierarchy
 	 * @param loader The class loader that is loading or has loaded the class
-	 * @param name The class name
 	 */
-	public ClassRelationResolver(ClassHierarchy hierarchy, ClassLoader loader, String name) {
+	public ClassRelationResolver(ClassHierarchy hierarchy, ClassLoader loader) {
 		this.loader = loader;
 		this.hierarchy = hierarchy;
-		this.name = name;
 	}
 
 	/**
-	 * Traverses all superclasses in DFS order
-	 * @param traverser
-	 * @param traverseInterfaces
+	 * Traverses all superclasses and interfaces (if traverseInterfaces is true) in DFS order
+	 * @param clsName The internal name of the class
+	 * @param traverser The traverse that traverses the superclasses. The traverse method immediately returns true when the traverser returns true.
+	 * @param traverseInterfaces Whether interfaces should be traversed too
 	 */
-	public boolean traverseSuperclasses(Function<String, Boolean> traverser, boolean traverseInterfaces) {
-		ClassData cls = this.hierarchy.getClass(this.loader, this.name);
+	public boolean traverseHierarchy(String clsName, Function<String, Boolean> traverser, boolean traverseInterfaces) {
+		ClassData cls = this.hierarchy.getClass(this.loader, clsName);
 		if(cls == null) {
-			throw new RuntimeException(String.format("Class %s was not found in class hierarchy", this.name));
+			throw new RuntimeException(String.format("Class %s was not found in class hierarchy", clsName));
 		}
-		return this.traverseSuperclasses(cls, traverser, traverseInterfaces);
+		return this.traverseHierarchy(cls, traverser, traverseInterfaces);
 	}
 
-	private boolean traverseSuperclasses(ClassData cls, Function<String, Boolean> traverser, boolean traverseInterfaces) {
+	private boolean traverseHierarchy(ClassData cls, Function<String, Boolean> traverser, boolean traverseInterfaces) {
 		String type = cls.name;
 		ClassData info = cls;
 		while (!"java/lang/Object".equals(type)) {
@@ -55,7 +53,7 @@ public class ClassRelationResolver {
 					if(itfNode == null) {
 						throw new RuntimeException(String.format("Class %s was not found in class hierarchy", itf));
 					}
-					if(this.traverseSuperclasses(itfNode, traverser, true)) {
+					if(this.traverseHierarchy(itfNode, traverser, true)) {
 						return true;
 					}
 				}
@@ -68,6 +66,6 @@ public class ClassRelationResolver {
 				}
 			}
 		}
-		return false;
+		return traverser.apply("java/lang/Object"); //Visit Object at the end
 	}
 }

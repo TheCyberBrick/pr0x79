@@ -1,14 +1,7 @@
 package program;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Test {
-	public static void main(String[] args) {
-		int t = 0;
-		
-		switch(t) {
-		case 0:
-			break;
-		case 1:
-			break;
-		}
-	}
 }

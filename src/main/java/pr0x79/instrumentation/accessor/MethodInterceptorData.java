@@ -68,7 +68,7 @@ public final class MethodInterceptorData {
 	}
 
 	/**
-	 * Returns the name of the {@link IAccessor} class
+	 * Returns the (not internal!) name of the {@link IAccessor} class
 	 * @return
 	 */
 	public String getAccessorClass() {

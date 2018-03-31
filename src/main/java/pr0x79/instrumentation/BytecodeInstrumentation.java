@@ -75,6 +75,12 @@ import pr0x79.instrumentation.identification.IFieldIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier;
 import pr0x79.instrumentation.identification.IMethodIdentifier.MethodDescription;
 import pr0x79.instrumentation.signature.ClassHierarchy;
+import pr0x79.instrumentation.signature.SignatureCompatibilityChecker;
+import pr0x79.instrumentation.signature.SignatureParser;
+import pr0x79.instrumentation.signature.SignatureParser.FormalTypeParameterSymbol;
+import pr0x79.instrumentation.signature.SignatureParser.Signature;
+import pr0x79.instrumentation.signature.SignatureParser.TypeSymbol;
+import pr0x79.instrumentation.signature.SignatureTypesResolver;
 
 /**
  * Instruments classes using the registered {@link IAccessor}s
@@ -710,6 +716,27 @@ public class BytecodeInstrumentation {
 			LabelNode interceptionScopeStart = new LabelNode();
 			LabelNode interceptionScopeEnd = new LabelNode();
 
+			if(targetMethod.signature != null) {
+				try {
+					Signature targetSig = SignatureParser.parse(targetMethod.signature);
+					TypeSymbol targetReturnSymbol = targetSig.returnType;
+					Signature interceptorSig = SignatureParser.parse(interceptor.getInterceptorMethodSignature());
+					TypeSymbol contextSymbol = interceptor.getContextSignature().getAsClass().getArgs().get(0).getSymbol();
+					
+					SignatureTypesResolver typesResolver = new SignatureTypesResolver(this.hierarchy, loader);
+					
+					Map<String, FormalTypeParameterSymbol> targetSigFormalTypeParameters = typesResolver.resolve(clsNode.name, targetSig);
+					Map<String, FormalTypeParameterSymbol> interceptorSigFormalTypeParameters = typesResolver.resolve(interceptor.getAccessorClass().replace('.', '/'), interceptorSig);
+					
+					SignatureCompatibilityChecker sigChecker = new SignatureCompatibilityChecker(this.hierarchy, loader, interceptorSigFormalTypeParameters, targetSigFormalTypeParameters);
+					
+					System.out.println("TARGET SIG: " + targetReturnSymbol.toString() + " " + contextSymbol.toString());
+					System.out.println("COMPAT: " + sigChecker.check(contextSymbol, targetReturnSymbol));
+				} catch(Exception ex) {
+					ex.printStackTrace();
+				}
+			}
+			
 			/*System.out.println("FULL SIG: " + targetMethod.signature);
 
 			if(targetMethod.signature != null) {
@@ -1093,8 +1120,8 @@ public class BytecodeInstrumentation {
 			final Type finalOtherType = otherType;
 
 			try {
-				ClassRelationResolver relation = new ClassRelationResolver(this.hierarchy, loader, type.getInternalName());
-				return relation.traverseSuperclasses(cls -> {
+				ClassRelationResolver relation = new ClassRelationResolver(this.hierarchy, loader);
+				return relation.traverseHierarchy(type.getInternalName(), cls -> {
 					if(cls.equals(finalOtherType.getInternalName())) {
 						//type extends or implements otherType
 						return true;

@@ -3,8 +3,11 @@ package program;
 import org.objectweb.asm.Type;
 
 import program.SomeClassBody.SomeClass;
+import program.SomeClassBody.TestIntfs;
+import proxy.accessors.IMainAccessor;
+import proxy.accessors.ISomeClassAccessor;
 
-public class Main {
+public class Main<G> implements TestIntfs<G> {
 
 	/*
 	 * This is the program that will be intercepted.
@@ -18,9 +21,13 @@ public class Main {
 		new Main();
 	}
 
+	public static class MainSub<G> extends Main<G> {
+		
+	}
+	
 	private SomeClass obj;
 
-	private Main() {
+	public Main() {
 		this.init();
 	}
 

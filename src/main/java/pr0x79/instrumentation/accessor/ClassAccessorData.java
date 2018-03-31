@@ -293,7 +293,7 @@ public final class ClassAccessorData {
 	}
 
 	/**
-	 * Returns the proxy class
+	 * Returns (non internal!) name of the accessor class
 	 * @return
 	 */
 	public String getAccessorClass() {
