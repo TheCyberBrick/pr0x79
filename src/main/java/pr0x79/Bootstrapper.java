@@ -15,31 +15,29 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
-import pr0x79.instrumentation.BytecodeInstrumentation;
-import pr0x79.instrumentation.InstrumentationClassWriter;
-import pr0x79.instrumentation.accessor.Accessors;
-import pr0x79.instrumentation.accessor.ClassAccessor;
-import pr0x79.instrumentation.accessor.ClassAccessorData;
-import pr0x79.instrumentation.accessor.IAccessor;
-import pr0x79.instrumentation.exception.InstrumentorException;
-import pr0x79.instrumentation.identification.Mappers;
-import pr0x79.instrumentation.signature.ClassHierarchy;
+import pr0x79.accessor.ClassAccessor;
+import pr0x79.accessor.IAccessor;
+import pr0x79.exception.InstrumentorException;
+import pr0x79.signature.ClassHierarchy;
 
 public class Bootstrapper {
 	private static final Bootstrapper INSTANCE = new Bootstrapper();
 
 	private final Mappers mappers;
 	private final Accessors accessors;
+	private final ClassLocators classLocators;
 	private final BytecodeInstrumentation instrumentor;
 
 	//Contains all accessor classes that were loaded through the class transformer
-	private final ClassHierarchy hierarchy = new ClassHierarchy();
-	
+	private final ClassHierarchy hierarchy;
+
 	private Set<IInstrumentor> instrumentors;
 	private boolean initializing = true;
 
 	private Bootstrapper() {
 		this.mappers = new Mappers(this);
+		this.classLocators = new ClassLocators(this);
+		this.hierarchy = new ClassHierarchy(this.classLocators);
 		this.instrumentor = new BytecodeInstrumentation(this.hierarchy);
 		this.accessors = new Accessors(this, this.mappers, this.instrumentor);
 		this.instrumentor.setAccessors(this.accessors);
@@ -71,28 +69,39 @@ public class Bootstrapper {
 			public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDoman, byte[] bytes) throws IllegalClassFormatException {
 				try {
 					boolean modified = false;
+					boolean fullClsNode = false;
 
 					ClassReader classReader = new ClassReader(bytes);
 					ClassNode clsNode = new ClassNode();
-					classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
-					
+					classReader.accept(clsNode, ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+
 					hierarchy.addClass(loader, clsNode);
-					
+
 					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
 
 					if(classIdentifier != null) {
+						if(!fullClsNode) {
+							clsNode = new ClassNode();
+							classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
+							fullClsNode = true;
+						}
 						if(instrumentor.instrumentAccessorClass(clsNode, Bootstrapper.this)) {
 							modified = true;
 						}
 					}
 
 					if(className != null && instrumentor.acceptsClass(className)) {
+						if(!fullClsNode) {
+							clsNode = new ClassNode();
+							classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
+							fullClsNode = true;
+						}
 						instrumentor.instrumentClass(loader, clsNode);
 						modified = true;
 					}
 
 					if(modified) {
-						ClassWriter classWriter = new InstrumentationClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+						ClassWriter classWriter = new InstrumentationClassWriter(hierarchy, loader, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 						clsNode.accept(classWriter);
 						return classWriter.toByteArray();
 					}
@@ -201,7 +210,7 @@ public class Bootstrapper {
 	}
 
 	/**
-	 * Returns the mappers registry
+	 * Returns the mapper registry
 	 * @return
 	 */
 	public Mappers getMappers() {
@@ -214,6 +223,14 @@ public class Bootstrapper {
 	 */
 	public Accessors getAccessors() {
 		return this.accessors;
+	}
+
+	/**
+	 * Returns the class locator registry
+	 * @return
+	 */
+	public ClassLocators getClassLocators() {
+		return this.classLocators;
 	}
 
 	/**

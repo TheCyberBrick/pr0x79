@@ -6,7 +6,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import pr0x79.instrumentation.identification.IInstructionIdentifier;
+import pr0x79.identification.IInstructionIdentifier;
 
 public class ReturnInstructionIdentifier implements IInstructionIdentifier {
 	private final int offset;

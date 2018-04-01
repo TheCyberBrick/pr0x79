@@ -2,7 +2,7 @@ package proxy.identifiers;
 
 import org.objectweb.asm.tree.MethodNode;
 
-import pr0x79.instrumentation.identification.IInstructionIdentifier;
+import pr0x79.identification.IInstructionIdentifier;
 
 
 public class IndexLocalVariableIdentifier implements IInstructionIdentifier {

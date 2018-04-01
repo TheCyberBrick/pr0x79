@@ -7,8 +7,8 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import pr0x79.instrumentation.identification.IInstructionIdentifier;
-import pr0x79.instrumentation.identification.IMethodIdentifier.MethodDescription;
+import pr0x79.identification.IInstructionIdentifier;
+import pr0x79.identification.IMethodIdentifier.MethodDescription;
 
 public class MethodCallInstructionIdentifier implements IInstructionIdentifier {
 	private final String[] owners;

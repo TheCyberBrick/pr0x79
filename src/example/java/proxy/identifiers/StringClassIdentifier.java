@@ -1,8 +1,10 @@
 package proxy.identifiers;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import pr0x79.instrumentation.identification.IClassIdentifier;
+import pr0x79.identification.IClassIdentifier;
 
 
 /**
@@ -11,14 +13,14 @@ import pr0x79.instrumentation.identification.IClassIdentifier;
  * names
  */
 public class StringClassIdentifier implements IClassIdentifier {
-	private final String[] classNames;
+	private final Set<String> classNames;
 
 	public StringClassIdentifier(List<String> classNames) {
-		this.classNames = classNames.toArray(new String[0]);
+		this.classNames = new HashSet<>(classNames);
 	}
 
 	@Override
-	public String[] getClassNames() {
+	public Set<String> getClassNames() {
 		return this.classNames;
 	}
 

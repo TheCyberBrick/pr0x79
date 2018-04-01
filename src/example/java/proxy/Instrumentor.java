@@ -10,10 +10,10 @@ import com.google.gson.stream.JsonReader;
 
 import pr0x79.Bootstrapper;
 import pr0x79.IInstrumentor;
-import pr0x79.instrumentation.identification.IClassIdentifier;
-import pr0x79.instrumentation.identification.IFieldIdentifier;
-import pr0x79.instrumentation.identification.IInstructionIdentifier;
-import pr0x79.instrumentation.identification.IMethodIdentifier;
+import pr0x79.identification.IClassIdentifier;
+import pr0x79.identification.IFieldIdentifier;
+import pr0x79.identification.IInstructionIdentifier;
+import pr0x79.identification.IMethodIdentifier;
 import proxy.mappings.MappingsParser;
 
 public class Instrumentor implements IInstrumentor {

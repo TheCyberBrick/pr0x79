@@ -3,7 +3,7 @@ package program;
 import java.util.List;
 import java.util.Map;
 
-import pr0x79.instrumentation.accessor.IAccessor;
+import pr0x79.accessor.IAccessor;
 
 public class SomeClassBody extends SigTestCls {
 	public SomeClass create(String val) {

@@ -1,8 +1,10 @@
 package proxy.identifiers;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import pr0x79.instrumentation.identification.IMethodIdentifier;
+import pr0x79.identification.IMethodIdentifier;
 
 /**
  * A simple implementation of {@link IMethodIdentifier} that
@@ -10,17 +12,16 @@ import pr0x79.instrumentation.identification.IMethodIdentifier;
  * and the method name with a list of specified names
  */
 public class StringMethodIdentifier implements IMethodIdentifier {
-	private final MethodDescription[] mappings;
+	private final Set<MethodDescription> mappings = new HashSet<>();
 
 	public StringMethodIdentifier(List<String> methodNames, List<String> methodDescriptors) {
-		this.mappings = new MethodDescription[methodNames.size()];
 		for(int i = 0; i < methodNames.size(); i++) {
-			this.mappings[i] = new MethodDescription(methodNames.get(i), methodDescriptors.get(i));
+			this.mappings.add(new MethodDescription(methodNames.get(i), methodDescriptors.get(i)));
 		}
 	}
 
 	@Override
-	public MethodDescription[] getMethods() {
+	public Set<MethodDescription> getMethods() {
 		return this.mappings;
 	}
 

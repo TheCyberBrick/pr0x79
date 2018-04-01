@@ -9,10 +9,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
-import pr0x79.instrumentation.identification.IClassIdentifier;
-import pr0x79.instrumentation.identification.IFieldIdentifier;
-import pr0x79.instrumentation.identification.IInstructionIdentifier;
-import pr0x79.instrumentation.identification.IMethodIdentifier;
+import pr0x79.identification.IClassIdentifier;
+import pr0x79.identification.IFieldIdentifier;
+import pr0x79.identification.IInstructionIdentifier;
+import pr0x79.identification.IMethodIdentifier;
 import proxy.identifiers.IndexInstructionIdentifier;
 import proxy.identifiers.IndexLocalVariableIdentifier;
 import proxy.identifiers.MethodCallInstructionIdentifier;

@@ -1,10 +1,10 @@
 package pr0x79;
 
-import pr0x79.instrumentation.accessor.IAccessor;
-import pr0x79.instrumentation.identification.IClassIdentifier;
-import pr0x79.instrumentation.identification.IFieldIdentifier;
-import pr0x79.instrumentation.identification.IInstructionIdentifier;
-import pr0x79.instrumentation.identification.IMethodIdentifier;
+import pr0x79.accessor.IAccessor;
+import pr0x79.identification.IClassIdentifier;
+import pr0x79.identification.IFieldIdentifier;
+import pr0x79.identification.IInstructionIdentifier;
+import pr0x79.identification.IMethodIdentifier;
 
 /**
  * <b>The class that implements {@link IInstrumentor}, and any {@link IAccessor} used therein, must not be loaded before the bootstrapper is initialized</b>.
