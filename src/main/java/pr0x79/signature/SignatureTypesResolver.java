@@ -5,11 +5,15 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import pr0x79.signature.ClassHierarchy.ClassData;
+import pr0x79.ClassHierarchy;
+import pr0x79.ClassHierarchy.ClassData;
 import pr0x79.signature.SignatureParser.FormalTypeParameterSymbol;
 import pr0x79.signature.SignatureParser.Signature;
 import pr0x79.signature.SignatureParser.TypeVariableSymbol;
 
+/**
+ * Finds and resolves all formal type parameters from variables in a {@link Signature}
+ */
 public class SignatureTypesResolver {
 	protected final ClassLoader loader;
 	protected final ClassHierarchy hierarchy;
@@ -23,7 +27,8 @@ public class SignatureTypesResolver {
 	 * Attempts to resolve all variables in the specified method signature.
 	 * May fail for local classes.
 	 * @param owner The internal class name of the owner class
-	 * @param signature The signature to resolve
+	 * @param sig The signature to resolve
+	 * @return
 	 */
 	public Map<String, FormalTypeParameterSymbol> resolve(String owner, Signature sig) {
 		Set<String> variables = findVariables(sig);
@@ -40,6 +45,7 @@ public class SignatureTypesResolver {
 	 * May fail for local classes.
 	 * @param cls The class of the signature
 	 * @param sig The signature to resolve
+	 * @return
 	 */
 	public Map<String, FormalTypeParameterSymbol> resolve(ClassData cls, Signature sig) {
 		Set<String> variables = findVariables(sig);

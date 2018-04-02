@@ -9,8 +9,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 
-import pr0x79.signature.ClassHierarchy;
-import pr0x79.signature.ClassHierarchy.ClassData;
+import pr0x79.ClassHierarchy.ClassData;
 
 public class ClassRelationResolver {
 	private final ClassLoader loader;

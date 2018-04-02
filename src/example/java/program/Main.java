@@ -7,7 +7,7 @@ import program.SomeClassBody.TestIntfs;
 import proxy.accessors.IMainAccessor;
 import proxy.accessors.ISomeClassAccessor;
 
-public class Main<G> implements TestIntfs<G> {
+public class Main implements TestIntfs {
 
 	/*
 	 * This is the program that will be intercepted.
@@ -21,7 +21,7 @@ public class Main<G> implements TestIntfs<G> {
 		new Main();
 	}
 
-	public static class MainSub<G> extends Main<G> {
+	public static class MainSub extends Main {
 		
 	}
 	

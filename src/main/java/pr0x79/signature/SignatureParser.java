@@ -163,7 +163,7 @@ public class SignatureParser {
 
 		@Override
 		public void accept(SignatureVisitor visitor) {
-			String[] classes = this.getName().split("$");
+			String[] classes = this.getName().split("$"); //TODO Is this valid?
 			if(this.isArray()) {
 				visitor = visitor.visitArrayType();
 			}

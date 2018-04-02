@@ -6,8 +6,7 @@ import java.util.List;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 
-import pr0x79.signature.ClassHierarchy;
-import pr0x79.signature.ClassHierarchy.ClassData;
+import pr0x79.ClassHierarchy.ClassData;
 
 public class InstrumentationClassWriter extends ClassWriter {
 	private final ClassHierarchy hierarchy;

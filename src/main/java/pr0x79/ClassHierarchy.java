@@ -1,4 +1,4 @@
-package pr0x79.signature;
+package pr0x79;
 
 import java.util.HashMap;
 import java.util.List;
@@ -9,8 +9,6 @@ import java.util.function.BiConsumer;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InnerClassNode;
-
-import pr0x79.ClassLocators;
 
 public class ClassHierarchy {
 	//TODO Replace ClassNode with extends, implements and signature structure only?

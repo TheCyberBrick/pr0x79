@@ -22,6 +22,7 @@ import pr0x79.accessor.IInterceptorContext;
 import pr0x79.accessor.Interceptor;
 import pr0x79.accessor.LocalVar;
 import pr0x79.accessor.MethodAccessor;
+import pr0x79.accessor.UncheckedSignature;
 import pr0x79.exception.InstrumentorException;
 import pr0x79.exception.accessor.method.InvalidMethodModifierException;
 import pr0x79.exception.accessor.method.InvalidReturnTypeException;
@@ -88,7 +89,7 @@ public final class ClassAccessorData {
 	 * @return
 	 */
 	private boolean identifyMethodAccessor(MethodNode method, Mappers mappers) {
-		String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, BytecodeInstrumentation.getInternalMethod(MethodAccessor.class, "method_identifier").getName(), String.class, null);
+		String methodIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, MethodAccessor.class, BytecodeInstrumentation.getInternalMethod(MethodAccessor.class, "method_identifier").getName(), String.class, null, null);
 		if(methodIdentifierId != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Method accessor %s#%s is a default method", accessorClass, method.name + method.desc));
@@ -201,11 +202,16 @@ public final class ClassAccessorData {
 				throw new InstrumentorException(String.format("Method interceptor for method %s#%s has invalid arguments", className, method.name + method.desc));
 			}
 
+			boolean checkReturnTypeSignature = true;
+			if(method.visibleParameterAnnotations != null && contextParam < method.visibleParameterAnnotations.length) {
+				checkReturnTypeSignature = BytecodeInstrumentation.getAnnotationValue(method.visibleParameterAnnotations[contextParam], UncheckedSignature.class, BytecodeInstrumentation.getInternalMethod(UncheckedSignature.class, "out").getName(), Boolean.class, true, false);
+			}
+
 			MethodInterceptorData methodInterceptor = new MethodInterceptorData(
 					classIdentifierId, methodIdentifierId, instructionIdentifierId, 
 					exitInstructionIdentifierIds, Type.getObjectType(className).getClassName(), 
 					method.name, method.desc, method.signature, methodLocalVars, contextParam,
-					contextSig);
+					contextSig, checkReturnTypeSignature);
 			methodInterceptor.initIdentifiers(mappers);
 			this.methodInterceptors.add(methodInterceptor);
 
@@ -221,7 +227,7 @@ public final class ClassAccessorData {
 	 * @return
 	 */
 	private boolean identifyFieldAccessor(MethodNode method, Mappers mappers) {
-		String fieldIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldAccessor.class, BytecodeInstrumentation.getInternalMethod(FieldAccessor.class, "field_identifier").getName(), String.class, null);
+		String fieldIdentifierId = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldAccessor.class, BytecodeInstrumentation.getInternalMethod(FieldAccessor.class, "field_identifier").getName(), String.class, null, null);
 		if(fieldIdentifierId != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Field accessor %s#%s is a default method", accessorClass, method.name + method.desc));
@@ -261,7 +267,7 @@ public final class ClassAccessorData {
 	 * @return
 	 */
 	private boolean identifyFieldGenerator(MethodNode method, Mappers mappers) {
-		String fieldNameIdentifier = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldGenerator.class, BytecodeInstrumentation.getInternalMethod(FieldGenerator.class, "field_name_identifier").getName(), String.class, null);
+		String fieldNameIdentifier = BytecodeInstrumentation.getAnnotationValue(method.visibleAnnotations, FieldGenerator.class, BytecodeInstrumentation.getInternalMethod(FieldGenerator.class, "field_name_identifier").getName(), String.class, null, null);
 		if(fieldNameIdentifier != null) {
 			if((method.access & Opcodes.ACC_ABSTRACT) == 0) {
 				throw new InstrumentorException(String.format("Field generator %s#%s is a default method", accessorClass, method.name + method.desc));

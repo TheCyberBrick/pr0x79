@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.function.Function;
 
 import org.objectweb.asm.ClassReader;
@@ -71,8 +72,8 @@ import pr0x79.identification.IClassIdentifier;
 import pr0x79.identification.IFieldIdentifier;
 import pr0x79.identification.IMethodIdentifier;
 import pr0x79.identification.IMethodIdentifier.MethodDescription;
-import pr0x79.signature.ClassHierarchy;
-import pr0x79.signature.SignatureCompatibilityChecker;
+import pr0x79.signature.AccessorAwareSignatureChecker;
+import pr0x79.signature.SignatureChecker.TypeVariableResolvingException;
 import pr0x79.signature.SignatureParser;
 import pr0x79.signature.SignatureParser.FormalTypeParameterSymbol;
 import pr0x79.signature.SignatureParser.Signature;
@@ -130,7 +131,13 @@ public class BytecodeInstrumentation {
 		return false;
 	}
 
-	private static boolean isIdentifiedMethod(MethodAccessorData accessor, MethodNode methodNode) {
+	/**
+	 * Checks whether the specified method is identified by the accessor
+	 * @param interceptor The accessor
+	 * @param methodNode The {@link MethodNode}
+	 * @return
+	 */
+	public static boolean isIdentifiedMethod(MethodAccessorData accessor, MethodNode methodNode) {
 		IMethodIdentifier.MethodDescription identified = accessor.getIdentifiedMethod();
 		if(identified != null && identified.getName().equals(methodNode.name) && identified.getDescriptor().equals(methodNode.desc)) {
 			return true;
@@ -151,7 +158,13 @@ public class BytecodeInstrumentation {
 		return false;
 	}
 
-	private static boolean isIdentifiedMethod(MethodInterceptorData interceptor, MethodNode methodNode) {
+	/**
+	 * Checks whether the specified method is identified by the interceptor
+	 * @param interceptor The interceptor
+	 * @param methodNode The {@link MethodNode}
+	 * @return
+	 */
+	public static boolean isIdentifiedMethod(MethodInterceptorData interceptor, MethodNode methodNode) {
 		IMethodIdentifier.MethodDescription identified = interceptor.getIdentifiedMethod();
 		if(identified != null && identified.getName().equals(methodNode.name) && identified.getDescriptor().equals(methodNode.desc)) {
 			return true;
@@ -172,7 +185,13 @@ public class BytecodeInstrumentation {
 		return false;
 	}
 
-	private static boolean isIdentifiedField(FieldAccessorData accessor, FieldNode fieldNode) {
+	/**
+	 * Checks whether the specified field is identified by the accessor
+	 * @param accessor The accessor
+	 * @param fieldNode The {@link FieldNode}
+	 * @return
+	 */
+	public static boolean isIdentifiedField(FieldAccessorData accessor, FieldNode fieldNode) {
 		IFieldIdentifier.FieldDescription identified = accessor.getIdentifiedField();
 		if(identified != null && identified.getName().equals(fieldNode.name) && identified.getDescriptor().equals(fieldNode.desc)) {
 			return true;
@@ -193,7 +212,14 @@ public class BytecodeInstrumentation {
 		return false;
 	}
 
-	private static boolean isIdentifiedClass(ClassAccessorData accessor, String cls, Function<Integer, ClassNode> reader) {
+	/**
+	 * Checks whether the specified class is identified by the accessor
+	 * @param interceptor The accessor
+	 * @param cls The internal class name
+	 * @param reader Allows getting a {@link ClassNode} with specific flags
+	 * @return
+	 */
+	public static boolean isIdentifiedClass(ClassAccessorData accessor, String cls, Function<Integer, ClassNode> reader) {
 		String identified = accessor.getIdentifiedClass();
 		if(identified != null && identified.equals(cls)) {
 			return true;
@@ -213,7 +239,14 @@ public class BytecodeInstrumentation {
 		return false;
 	}
 
-	private static boolean isIdentifiedClass(MethodInterceptorData interceptor, String cls, Function<Integer, ClassNode> reader) {
+	/**
+	 * Checks whether the specified class is identified by the interceptor
+	 * @param interceptor The interceptor
+	 * @param cls The internal class name
+	 * @param reader Allows getting a {@link ClassNode} with specific flags
+	 * @return
+	 */
+	public static boolean isIdentifiedClass(MethodInterceptorData interceptor, String cls, Function<Integer, ClassNode> reader) {
 		String identified = interceptor.getIdentifiedClass();
 		if(identified != null && identified.equals(cls)) {
 			return true;
@@ -344,7 +377,7 @@ public class BytecodeInstrumentation {
 	 * @param type
 	 * @return
 	 */
-	public static <T> T getAnnotationValue(List<AnnotationNode> annotations, Class<?> annotation, String name, Class<T> type, T defaultVal) {
+	static <T> T getAnnotationValue(List<AnnotationNode> annotations, Class<?> annotation, String name, Class<T> type, T defaultNotAvailableVal, T defaultFieldVal) {
 		if(annotations != null) {
 			for(AnnotationNode ann : annotations) {
 				if(ann.desc.equals(Type.getDescriptor(annotation))) {
@@ -352,11 +385,11 @@ public class BytecodeInstrumentation {
 					if(val != null) {
 						return val;
 					}
-					return defaultVal;
+					return defaultFieldVal;
 				}
 			}
 		}
-		return defaultVal;
+		return defaultNotAvailableVal;
 	}
 
 	/**
@@ -368,10 +401,12 @@ public class BytecodeInstrumentation {
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
-	public static <T> T getAnnotationValue(AnnotationNode annotation, String name, Class<T> type) {
-		for(int i = 0; i < annotation.values.size(); i += 2) {
-			if(name.equals(((String) annotation.values.get(i))) && annotation.values.get(i + 1) != null && type.isAssignableFrom(annotation.values.get(i + 1).getClass())) {
-				return (T) annotation.values.get(i + 1);
+	static <T> T getAnnotationValue(AnnotationNode annotation, String name, Class<T> type) {
+		if(annotation.values != null) {
+			for(int i = 0; i < annotation.values.size(); i += 2) {
+				if(name.equals(((String) annotation.values.get(i))) && annotation.values.get(i + 1) != null && type.isAssignableFrom(annotation.values.get(i + 1).getClass())) {
+					return (T) annotation.values.get(i + 1);
+				}
 			}
 		}
 		return null;
@@ -823,82 +858,39 @@ public class BytecodeInstrumentation {
 			LabelNode interceptionScopeStart = new LabelNode();
 			LabelNode interceptionScopeEnd = new LabelNode();
 
+			//Check context return type compatibility
 			if(targetMethod.signature != null) {
+				Signature targetSig = SignatureParser.parse(targetMethod.signature);
+				TypeSymbol targetReturnSymbol = targetSig.returnType;
+				Signature interceptorSig = SignatureParser.parse(interceptor.getInterceptorMethodSignature());
+				TypeSymbol contextSymbol = interceptor.getContextSignature().getAsClass().getArgs().get(0).getSymbol();
+
+				SignatureTypesResolver typesResolver = new SignatureTypesResolver(this.hierarchy, loader);
+
+				Map<String, FormalTypeParameterSymbol> targetSigFormalTypeParameters = typesResolver.resolve(clsNode.name, targetSig);
+				Map<String, FormalTypeParameterSymbol> interceptorSigFormalTypeParameters = typesResolver.resolve(interceptor.getAccessorClass().replace('.', '/'), interceptorSig);
+
+				AccessorAwareSignatureChecker sigChecker = new AccessorAwareSignatureChecker(this.hierarchy, loader, this.accessors, this.locators, false);
+
 				try {
-					Signature targetSig = SignatureParser.parse(targetMethod.signature);
-					TypeSymbol targetReturnSymbol = targetSig.returnType;
-					Signature interceptorSig = SignatureParser.parse(interceptor.getInterceptorMethodSignature());
-					TypeSymbol contextSymbol = interceptor.getContextSignature().getAsClass().getArgs().get(0).getSymbol();
-
-					SignatureTypesResolver typesResolver = new SignatureTypesResolver(this.hierarchy, loader);
-
-					Map<String, FormalTypeParameterSymbol> targetSigFormalTypeParameters = typesResolver.resolve(clsNode.name, targetSig);
-					Map<String, FormalTypeParameterSymbol> interceptorSigFormalTypeParameters = typesResolver.resolve(interceptor.getAccessorClass().replace('.', '/'), interceptorSig);
-
-					SignatureCompatibilityChecker sigChecker = new SignatureCompatibilityChecker(this.hierarchy, loader, interceptorSigFormalTypeParameters, targetSigFormalTypeParameters);
-
-					System.out.println("TARGET SIG: " + targetReturnSymbol.toString() + " " + contextSymbol.toString());
-					System.out.println("COMPAT: " + sigChecker.check(contextSymbol, targetReturnSymbol));
-				} catch(Exception ex) {
-					ex.printStackTrace();
-				}
-			}
-
-			/*System.out.println("FULL SIG: " + targetMethod.signature);
-
-			if(targetMethod.signature != null) {
-				Signature sig = SignatureParser.parse(targetMethod.signature);
-				StringJoiner joiner = new StringJoiner(", ");
-				for(SignatureSymbol param : sig.formalTypeParameters) {
-					joiner.add(param.toString());
-				}
-				System.out.println("PARAMS: " + joiner.toString());
-				SignatureTypesResolver.resolve(loader, this.hierarchy, clsNode.name, sig);
-			}
-
-			String returnSig = null;
-			if(targetMethod.signature != null) {
-				ReturnTypeSignatureMapper mapper = new ReturnTypeSignatureMapper(Opcodes.ASM5);
-				new SignatureReader(targetMethod.signature).accept(mapper);
-				returnSig = mapper.getSignature();
-			}
-
-			System.out.println("CLS SIG: " + clsNode.signature);
-			System.out.println("RET SIG: " + returnSig);
-			System.out.println("CONT SIG: " + interceptor.getContextSignature());
-
-			Type contextReturnType;
-			Map<Integer, Type> contextSigTypes = new HashMap<>();
-			if(interceptor.getContextSignature() != null) {
-				SignatureTypesMapper contextSigTypesMapper = new SignatureTypesMapper(Opcodes.ASM5, contextSigTypes, Integer.MAX_VALUE);
-				new SignatureReader(interceptor.getContextSignature()).accept(contextSigTypesMapper);
-				contextReturnType = contextSigTypes.get(0);
-				System.out.println("SIGS: " + contextSigTypes);
-			} else {
-				contextReturnType = Type.VOID_TYPE;
-			}
-
-			System.out.println("RET TYPE: " + contextReturnType + " " + Type.VOID_TYPE.getSort());
-
-			//TODO Verify context sig
-			if((returnSig == null) != (interceptor.getContextSignature() == null)) {
-				throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
-			}
-			if(returnSig != null && interceptor.getContextSignature() != null) {
-				Map<Integer, Type> returnSigTypes = new HashMap<>();
-				SignatureTypesMapper returnSigTypesMapper = new SignatureTypesMapper(Opcodes.ASM5, returnSigTypes, Integer.MAX_VALUE);
-				new SignatureReader(returnSig).accept(returnSigTypesMapper);
-
-				if(returnSigTypes.size() != contextSigTypes.size()) {
-					throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
-				}
-				for(Entry<Integer, Type> returnSigTypeEntry : returnSigTypes.entrySet()) {
-					Type contextSigType = contextSigTypes.get(returnSigTypeEntry.getKey());
-					if(!this.isTypeInstanceof(loader, returnSigTypeEntry.getValue(), contextSigType)) {
-						throw new InvalidContextSignatureException(String.format("Interceptor context signature of %s#%s is invalid. Current: %s, Expected: %s, or accessors of those classes", clsNode.name, targetMethod.name + targetMethod.desc, interceptor.getContextSignature(), returnSig), clsNode.name, new MethodDescription(targetMethod.name, targetMethod.desc), interceptor.getContextSignature(), returnSig);
+					if(!sigChecker.check(targetReturnSymbol, contextSymbol, targetSigFormalTypeParameters, interceptorSigFormalTypeParameters, interceptor.getCheckReturnTypeSignature())) {
+						StringJoiner targetSigFormalTypeParametersStr = new StringJoiner(", ");
+						for(FormalTypeParameterSymbol formal : targetSigFormalTypeParameters.values()) {
+							targetSigFormalTypeParametersStr.add(formal.toString());
+						}
+						StringJoiner interceptorTypeParametersStr = new StringJoiner(", ");
+						for(FormalTypeParameterSymbol formal : interceptorSigFormalTypeParameters.values()) {
+							interceptorTypeParametersStr.add(formal.toString());
+						}
+						throw new InstrumentorException(String.format("IInterceptorContext signature of %s#%s is not compabible.\nExpected: %s,\nActual: %s", 
+								interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc(), 
+								"<" + targetSigFormalTypeParametersStr.toString() + "> " + targetReturnSymbol.toString(), 
+								"<" + interceptorTypeParametersStr.toString() + "> " + contextSymbol));
 					}
+				} catch (TypeVariableResolvingException e) {
+					throw new InstrumentorException(String.format("Failed checking IInterceptorContext signature compatibility for %s#%s", interceptor.getAccessorClass(), interceptor.getInterceptorMethod() + interceptor.getInterceptorMethodDesc()), e);
 				}
-			}*/
+			}
 
 			//Write context signature to string
 			String contextVarSig = null;
@@ -1229,13 +1221,8 @@ public class BytecodeInstrumentation {
 			try {
 				ClassRelationResolver relation = new ClassRelationResolver(this.hierarchy, loader);
 				return relation.traverseHierarchy(type.getInternalName(), (cls, itf, clsNode, clsFlags) -> {
-					if(cls.equals(finalOtherType.getInternalName())) {
-						//type extends or implements otherType
-						return true;
-					}
-
 					if(accessorInstance != null) {
-						//Check if accessor is an accesor of this superclass/-interface
+						//Check if accessor is an accessor of this (super-)class/interface
 						if(isIdentifiedClass(accessorInstance, cls, flags -> {
 							if(clsNode != null && flags == clsFlags) {
 								return clsNode;
@@ -1246,7 +1233,8 @@ public class BytecodeInstrumentation {
 						}
 					}
 
-					return false;
+					//Check whether type extends or implements otherType
+					return cls.equals(finalOtherType.getInternalName());
 				}, true);
 			} catch(Exception ex) {
 				resolverException = ex;

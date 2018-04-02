@@ -56,7 +56,7 @@ public final class Accessors {
 			throw new InstrumentorException(String.format("Accessor %s is not an interface", className));
 		}
 
-		String classIdentifierId = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
+		String classIdentifierId = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null, null);
 		if(classIdentifierId == null) {
 			throw new InstrumentorException(String.format("Accessor %s does not have a class accessor annotation", className));
 		}
@@ -101,7 +101,7 @@ public final class Accessors {
 	}
 
 	/**
-	 * Gets an accessor by class name
+	 * Gets an accessor by (non-internal!) class name
 	 * @param name
 	 * @return
 	 */

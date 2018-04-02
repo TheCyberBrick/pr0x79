@@ -18,7 +18,6 @@ import org.objectweb.asm.tree.ClassNode;
 import pr0x79.accessor.ClassAccessor;
 import pr0x79.accessor.IAccessor;
 import pr0x79.exception.InstrumentorException;
-import pr0x79.signature.ClassHierarchy;
 
 public class Bootstrapper {
 	private static final Bootstrapper INSTANCE = new Bootstrapper();
@@ -72,11 +71,12 @@ public class Bootstrapper {
 
 					ClassReader classReader = new ClassReader(bytes);
 					ClassNode clsNode = new ClassNode();
-					classReader.accept(clsNode, ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+					final int structureFlags = ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG;
+					classReader.accept(clsNode, structureFlags);
 
 					hierarchy.addClass(loader, clsNode);
 
-					final String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
+					final String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null, null);
 
 					if(classIdentifier != null) {
 						clsNode = new ClassNode();
@@ -87,8 +87,8 @@ public class Bootstrapper {
 					}
 
 					final ClassNode acceptsClassNode = clsNode;
-					if(className != null && instrumentor.acceptsClass(clsNode, classIdentifier != null ? ClassReader.SKIP_FRAMES : ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG, flags -> {
-						if((classIdentifier != null && flags == ClassReader.SKIP_FRAMES || classIdentifier == null) && (flags == (ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG))) {
+					if(className != null && instrumentor.acceptsClass(clsNode, classIdentifier != null ? ClassReader.SKIP_FRAMES : structureFlags, flags -> {
+						if((classIdentifier != null && flags == ClassReader.SKIP_FRAMES) || (classIdentifier == null && flags == structureFlags)) {
 							return acceptsClassNode;
 						}
 						ClassNode newNode = new ClassNode();

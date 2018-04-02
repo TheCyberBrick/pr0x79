@@ -11,9 +11,9 @@ import pr0x79.accessor.IInterceptorContext;
 import pr0x79.accessor.Interceptor;
 import pr0x79.accessor.LocalVar;
 import pr0x79.accessor.MethodAccessor;
-import program.Main;
-import program.Main.MainSub;
-import proxy.Instrumentor;
+import pr0x79.accessor.UncheckedSignature;
+import program.SomeClassBody.SomeClass;
+import program.SomeClassBody.TestIntfs;
 
 @ClassAccessor(classIdentifier = "SomeClass")
 public interface ISomeClassAccessor extends IAccessor {
@@ -32,11 +32,11 @@ public interface ISomeClassAccessor extends IAccessor {
 			exitInstructionIdentifiers = {"first_return-1", "first_return-2"})
 	public default 
 
-	<M extends Main<M>> 
+	<M extends T, T extends TestIntfs> 
 
 	void interceptPrint(@LocalVar(instructionIdentifier = "local_var_1") String input, 
 
-			IInterceptorContext<Map<String, List<? extends M>>> 
+			IInterceptorContext<Map<String, List<M>>> 
 
 	context) {
 		System.out.println("\n--------Interception--------");

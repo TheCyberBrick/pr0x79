@@ -27,13 +27,14 @@ public final class MethodInterceptorData {
 	private IClassIdentifier classIdentifier;
 	private final int contextParam;
 	private final TypeClassSymbol contextSig;
+	private final boolean checkReturnTypeSignature;
 
 	private String identifiedClass;
 	private MethodDescription identifiedMethod;
 
 	MethodInterceptorData(String classIdentifierId, String methodIdentifierId, String instructionIdentifierId, String[] exitInstructionIdentifierIds, 
 			String accessorClass, String interceptorMethod, String interceptorMethodDesc, String interceptorMethodSig, List<LocalVarData> localVars, int contextParam,
-			TypeClassSymbol contextSig) {
+			TypeClassSymbol contextSig, boolean checkReturnTypeSignature) {
 		this.classIdentifierId = classIdentifierId;
 		this.methodIdentifierId = methodIdentifierId;
 		this.accessorClass = accessorClass;
@@ -45,6 +46,7 @@ public final class MethodInterceptorData {
 		this.localVars = localVars;
 		this.contextParam = contextParam;
 		this.contextSig = contextSig;
+		this.checkReturnTypeSignature = checkReturnTypeSignature;
 	}
 
 	/**
@@ -57,6 +59,14 @@ public final class MethodInterceptorData {
 
 	void setIdentifiedClass(String cls) {
 		this.identifiedClass = cls;
+	}
+
+	/**
+	 * Returns whether the return type signature should be checked
+	 * @return
+	 */
+	public boolean getCheckReturnTypeSignature() {
+		return this.checkReturnTypeSignature;
 	}
 
 	/**
