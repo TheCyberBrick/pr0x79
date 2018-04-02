@@ -29,8 +29,8 @@ public class InstrumentationClassWriter extends ClassWriter {
 
 	@Override
 	protected String getCommonSuperClass(String type1, String type2) {
-		ClassData cls1 = this.hierarchy.getClass(this.loader, type1);
-		ClassData cls2 = this.hierarchy.getClass(this.loader, type2);
+		ClassData cls1 = this.hierarchy.getClass(this.loader, type1, null);
+		ClassData cls2 = this.hierarchy.getClass(this.loader, type2, null);
 		if((cls1.access & Opcodes.ACC_INTERFACE) != 0) {
 			if(this.checkImplements(cls2, cls1.name)) {
 				return cls2.name;
@@ -61,7 +61,7 @@ public class InstrumentationClassWriter extends ClassWriter {
 
 	private List<String> getSuperclasses(ClassData cls) {
 		List<String> classes = new ArrayList<>();
-		this.resolver.traverseHierarchy(cls.name, (supercls, itf) -> classes.add(supercls), false);
+		this.resolver.traverseHierarchy(cls.name, (supercls, itf, clsNode, flags) -> classes.add(supercls), false);
 		return classes;
 	}
 
@@ -72,7 +72,7 @@ public class InstrumentationClassWriter extends ClassWriter {
 			}
 		}
 		if(cls.superclass != null) {
-			return this.resolver.traverseHierarchy(cls.superclass, (clsItf, isItf) -> isItf && itf.equals(clsItf), true);
+			return this.resolver.traverseHierarchy(cls.superclass, (clsItf, isItf, clsNode, flags) -> isItf && itf.equals(clsItf), true);
 		}
 		return false;
 	}

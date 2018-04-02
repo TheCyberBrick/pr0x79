@@ -17,7 +17,6 @@ public interface IInterceptorContext<T> {
 
 	/**
 	 * Returns the exit index (see {@link #exitAt(int)})
-	 * or {@link #DO_NOT_EXIT} if no exit index was specified
 	 * @return
 	 */
 	@Internal(id = "get_exit")
@@ -44,7 +43,6 @@ public interface IInterceptorContext<T> {
 
 	/**
 	 * Returns the return value (see {@link #returnWith(Object)}
-	 * or {@link #DO_NOT_RETURN} if not return value was specified
 	 * @return
 	 */
 	@Internal(id = "get_return")

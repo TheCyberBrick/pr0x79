@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.BiConsumer;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
@@ -68,20 +69,22 @@ public class ClassHierarchy {
 	 * Returns the outer class data for the specified class
 	 * @param loader The class loader that loaded the specified class
 	 * @param name The internal name of the inner class
+	 * @param onFallback Called when a class had to be loaded from stream with parameters {@link ClassNode} and {@link ClassReader} flags
 	 * @return
 	 */
-	public synchronized ClassData getOuterClass(ClassLoader loader, String name) {
-		return getOuterClass(loader, name, true);
+	public synchronized ClassData getOuterClass(ClassLoader loader, String name, BiConsumer<ClassNode, Integer> onFallback) {
+		return getOuterClass(loader, name, true, onFallback);
 	}
 
 	/**
 	 * Returns the class data for the specified class
 	 * @param loader The class loader that loaded the specified class
 	 * @param name The internal name of the class
+	 * @param onFallback Called when a class had to be loaded from stream with parameters {@link ClassNode} and {@link ClassReader} flags
 	 * @return
 	 */
-	public synchronized ClassData getClass(ClassLoader loader, String name) {
-		return this.getClass(loader, name, true);
+	public synchronized ClassData getClass(ClassLoader loader, String name, BiConsumer<ClassNode, Integer> onFallback) {
+		return this.getClass(loader, name, true, onFallback);
 	}
 
 	/**
@@ -89,16 +92,17 @@ public class ClassHierarchy {
 	 * @param loader The class loader that loaded the specified class
 	 * @param name The internal name of the class
 	 * @param classFileFallback Whether the class should be read from a file if it is not found in the hierarchy
+	 * @param onFallback Called when a class had to be loaded from stream with parameters {@link ClassNode} and {@link ClassReader} flags
 	 * @return
 	 */
-	public synchronized ClassData getOuterClass(ClassLoader loader, String name, boolean classFileFallback) {
+	public synchronized ClassData getOuterClass(ClassLoader loader, String name, boolean classFileFallback, BiConsumer<ClassNode, Integer> onFallback) {
 		ClassLoader l = loader;
 		do {
 			Map<String, String> map = this.outerClassNames.get(l);
 			if(map != null) {
 				String outerName = map.get(name);
 				if(outerName != null) {
-					ClassData outer = this.getClass(loader, outerName, classFileFallback);
+					ClassData outer = this.getClass(loader, outerName, classFileFallback, onFallback);
 					if(outer != null) {
 						return outer;
 					}
@@ -107,9 +111,9 @@ public class ClassHierarchy {
 			l = l.getParent();
 		} while(l != null);
 
-		ClassData data = this.getClass(loader, name, classFileFallback);
+		ClassData data = this.getClass(loader, name, classFileFallback, onFallback);
 		if(data != null && data.outerclass != null) {
-			return this.getClass(loader, data.outerclass, classFileFallback);
+			return this.getClass(loader, data.outerclass, classFileFallback, onFallback);
 		}
 
 		return null;
@@ -120,9 +124,10 @@ public class ClassHierarchy {
 	 * @param loader The class loader that loaded the specified class
 	 * @param name The internal name of the class
 	 * @param classFileFallback Whether the class should be read from a file if it is not found in the hierarchy
+	 * @param onFallback Called when a class had to be loaded from stream with parameters {@link ClassNode} and {@link ClassReader} flags
 	 * @return
 	 */
-	public synchronized ClassData getClass(ClassLoader loader, String name, boolean classFileFallback) {
+	public synchronized ClassData getClass(ClassLoader loader, String name, boolean classFileFallback, BiConsumer<ClassNode, Integer> onFallback) {
 		//Try to get class from loaded hierarchy first. Speeds up lookup and
 		//works for special custom class loaders unlike getResourceAsStream
 		ClassLoader l = loader;
@@ -141,6 +146,9 @@ public class ClassHierarchy {
 			//Class was not found, probably loaded before the class transformer was attached
 			ClassNode node = this.locators.getClass(loader, name, ClassReader.SKIP_CODE | ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
 			if(node != null) {
+				if(onFallback != null) {
+					onFallback.accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+				}
 				return new ClassData(node.name, node.signature, node.superName, node.interfaces, node.outerClass, node.access);
 			}
 		}

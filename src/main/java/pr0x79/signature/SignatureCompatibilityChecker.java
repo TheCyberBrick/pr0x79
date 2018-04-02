@@ -87,12 +87,12 @@ public class SignatureCompatibilityChecker {
 			if("java/lang/Object".equals(symbolCls)) {
 				return true; //Object will always be assignable to any <? super X>
 			}
-			return this.classRelationResolver.traverseHierarchy(requirementCls, (cls, itf) -> symbolCls.equals(cls), includeInterfaces);
+			return this.classRelationResolver.traverseHierarchy(requirementCls, (cls, itf, clsNode, flags) -> symbolCls.equals(cls), includeInterfaces);
 		} else {
 			if("java/lang/Object".equals(requirementCls)) {
 				return true; //Any non-primitive class is always assignable to Object, no need to traverse hierarchy
 			}
-			return this.classRelationResolver.traverseHierarchy(symbolCls, (cls, itf) -> requirementCls.equals(cls), includeInterfaces);
+			return this.classRelationResolver.traverseHierarchy(symbolCls, (cls, itf, clsNode, flags) -> requirementCls.equals(cls), includeInterfaces);
 		}
 	}
 

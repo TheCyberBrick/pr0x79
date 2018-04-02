@@ -12,7 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Function;
 
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -80,19 +82,21 @@ import pr0x79.signature.SignatureTypesResolver;
 /**
  * Instruments classes using the registered {@link IAccessor}s
  */
-class BytecodeInstrumentation {
+public class BytecodeInstrumentation {
 	private Accessors accessors;
 	private final ClassHierarchy hierarchy;
+	private final ClassLocators locators;
 
-	BytecodeInstrumentation(ClassHierarchy hierarchy) {
+	BytecodeInstrumentation(ClassHierarchy hierarchy, ClassLocators locators) {
 		this.hierarchy = hierarchy;
+		this.locators = locators;
 	}
 
 	/**
 	 * Sets the accessors
 	 * @param accessors
 	 */
-	public void setAccessors(Accessors accessors) {
+	void setAccessors(Accessors accessors) {
 		this.accessors = accessors;
 	}
 
@@ -101,14 +105,24 @@ class BytecodeInstrumentation {
 	 * @param cls
 	 * @return
 	 */
-	public boolean acceptsClass(String cls) {
+	boolean acceptsClass(ClassNode cls, int flags, Function<Integer, ClassNode> reader) {
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			if(accessor.getClassIdentifier() != null && isIdentifiedClass(accessor, cls)) {
+			if(accessor.getClassIdentifier() != null && isIdentifiedClass(accessor, cls.name, clsFlags -> {
+				if(clsFlags == flags) {
+					return cls;
+				}
+				return reader.apply(clsFlags);
+			})) {
 				return true;
 			}
 
 			for(MethodInterceptorData interceptor : accessor.getMethodInterceptors()) {
-				if(interceptor.getClassIdentifier() != null && isIdentifiedClass(interceptor, cls)) {
+				if(interceptor.getClassIdentifier() != null && isIdentifiedClass(interceptor, cls.name, clsFlags -> {
+					if(clsFlags == flags) {
+						return cls;
+					}
+					return reader.apply(clsFlags);
+				})) {
 					return true;
 				}
 			}
@@ -179,40 +193,40 @@ class BytecodeInstrumentation {
 		return false;
 	}
 
-	private static boolean isIdentifiedClass(ClassAccessorData accessor, String name) {
+	private static boolean isIdentifiedClass(ClassAccessorData accessor, String cls, Function<Integer, ClassNode> reader) {
 		String identified = accessor.getIdentifiedClass();
-		if(identified != null && identified.equals(name)) {
+		if(identified != null && identified.equals(cls)) {
 			return true;
 		}
 		IClassIdentifier identifier = accessor.getClassIdentifier();
 		if(identifier.isStatic()) {
-			if(identifier.getClassNames().contains(name)) {
-				accessor.setIdentifiedClass(name);
+			if(identifier.getClassNames().contains(cls)) {
+				accessor.setIdentifiedClass(cls);
 				return true;
 			}
 		} else {
-			if(identifier.isIdentifiedClass(name)) {
-				accessor.setIdentifiedClass(name);
+			if(identifier.isIdentifiedClass(reader.apply(ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES), ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES, reader)) {
+				accessor.setIdentifiedClass(cls);
 				return true;
 			}
 		}
 		return false;
 	}
 
-	private static boolean isIdentifiedClass(MethodInterceptorData interceptor, String name) {
+	private static boolean isIdentifiedClass(MethodInterceptorData interceptor, String cls, Function<Integer, ClassNode> reader) {
 		String identified = interceptor.getIdentifiedClass();
-		if(identified != null && identified.equals(name)) {
+		if(identified != null && identified.equals(cls)) {
 			return true;
 		}
 		IClassIdentifier identifier = interceptor.getClassIdentifier();
 		if(identifier.isStatic()) {
-			if(identifier.getClassNames().contains(name)) {
-				interceptor.setIdentifiedClass(name);
+			if(identifier.getClassNames().contains(cls)) {
+				interceptor.setIdentifiedClass(cls);
 				return true;
 			}
 		} else {
-			if(identifier.isIdentifiedClass(name)) {
-				interceptor.setIdentifiedClass(name);
+			if(identifier.isIdentifiedClass(reader.apply(ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES), ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES, reader)) {
+				interceptor.setIdentifiedClass(cls);
 				return true;
 			}
 		}
@@ -226,7 +240,7 @@ class BytecodeInstrumentation {
 	 * @param identifiers
 	 * @return True if modified
 	 */
-	public boolean instrumentAccessorClass(ClassNode clsNode, Bootstrapper bootstrapper) {
+	boolean instrumentAccessorClass(ClassNode clsNode, Bootstrapper bootstrapper) {
 		ClassAccessorData accessor = this.accessors.getAccessorByClassName(Type.getObjectType(clsNode.name).getClassName());
 
 		if(accessor != null) {
@@ -369,10 +383,15 @@ class BytecodeInstrumentation {
 	 * @param loader
 	 * @param clsNode
 	 */
-	public void instrumentClass(ClassLoader loader, ClassNode clsNode) {
+	void instrumentClass(ClassLoader loader, ClassNode clsNode, int flags, Function<Integer, ClassNode> reader) {
 		List<ClassAccessorData> classAccessors = new ArrayList<>();
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			if(isIdentifiedClass(accessor, clsNode.name)) {
+			if(isIdentifiedClass(accessor, clsNode.name, clsFlags -> {
+				if(clsFlags == flags) {
+					return clsNode;
+				}
+				return reader.apply(clsFlags);
+			})) {
 				classAccessors.add(accessor);
 			}
 		}
@@ -392,7 +411,7 @@ class BytecodeInstrumentation {
 			this.instrumentFieldAccessors(loader, clsNode, classAccessor);
 			this.instrumentFieldGenerators(loader, clsNode, classAccessor);
 			this.instrumentMethodAccessors(loader, clsNode, classAccessor);
-			this.instrumentMethodInterceptors(loader, clsNode, classAccessor);
+			this.instrumentMethodInterceptors(loader, clsNode, classAccessor, flags, reader);
 		}
 	}
 
@@ -736,10 +755,15 @@ class BytecodeInstrumentation {
 	 * @param interceptor
 	 * @param clsNode
 	 */
-	private void instrumentMethodInterceptors(ClassLoader loader, ClassNode clsNode, ClassAccessorData classAccessor) {
+	private void instrumentMethodInterceptors(ClassLoader loader, ClassNode clsNode, ClassAccessorData classAccessor, int flags, Function<Integer, ClassNode> reader) {
 		List<MethodInterceptorData> classInterceptors = new ArrayList<>();
 		for(MethodInterceptorData interceptor : classAccessor.getMethodInterceptors()) {
-			if(isIdentifiedClass(interceptor, clsNode.name)) {
+			if(isIdentifiedClass(interceptor, clsNode.name, clsFlags -> {
+				if(clsFlags == flags) {
+					return clsNode;
+				}
+				return reader.apply(clsFlags);
+			})) {
 				classInterceptors.add(interceptor);
 			}
 		}
@@ -1204,7 +1228,7 @@ class BytecodeInstrumentation {
 
 			try {
 				ClassRelationResolver relation = new ClassRelationResolver(this.hierarchy, loader);
-				return relation.traverseHierarchy(type.getInternalName(), (cls, itf) -> {
+				return relation.traverseHierarchy(type.getInternalName(), (cls, itf, clsNode, clsFlags) -> {
 					if(cls.equals(finalOtherType.getInternalName())) {
 						//type extends or implements otherType
 						return true;
@@ -1212,7 +1236,12 @@ class BytecodeInstrumentation {
 
 					if(accessorInstance != null) {
 						//Check if accessor is an accesor of this superclass/-interface
-						if(isIdentifiedClass(accessorInstance, cls)) {
+						if(isIdentifiedClass(accessorInstance, cls, flags -> {
+							if(clsNode != null && flags == clsFlags) {
+								return clsNode;
+							}
+							return this.locators.getClass(loader, cls, flags);
+						})) {
 							return true;
 						}
 					}
@@ -1224,7 +1253,8 @@ class BytecodeInstrumentation {
 			}
 
 			//If resolver fails, try to directly check if otherType is an accessor of type
-			if(accessorInstance != null && isIdentifiedClass(accessorInstance, type.getInternalName())) {
+			final String cls = type.getClassName();
+			if(accessorInstance != null && isIdentifiedClass(accessorInstance, cls, flags -> this.locators.getClass(loader, cls, flags))) {
 				return true;
 			}
 

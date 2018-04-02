@@ -38,7 +38,7 @@ public class Bootstrapper {
 		this.mappers = new Mappers(this);
 		this.classLocators = new ClassLocators(this);
 		this.hierarchy = new ClassHierarchy(this.classLocators);
-		this.instrumentor = new BytecodeInstrumentation(this.hierarchy);
+		this.instrumentor = new BytecodeInstrumentation(this.hierarchy, this.classLocators);
 		this.accessors = new Accessors(this, this.mappers, this.instrumentor);
 		this.instrumentor.setAccessors(this.accessors);
 	}
@@ -69,7 +69,6 @@ public class Bootstrapper {
 			public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined, ProtectionDomain protectionDoman, byte[] bytes) throws IllegalClassFormatException {
 				try {
 					boolean modified = false;
-					boolean fullClsNode = false;
 
 					ClassReader classReader = new ClassReader(bytes);
 					ClassNode clsNode = new ClassNode();
@@ -77,26 +76,38 @@ public class Bootstrapper {
 
 					hierarchy.addClass(loader, clsNode);
 
-					String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
+					final String classIdentifier = BytecodeInstrumentation.getAnnotationValue(clsNode.visibleAnnotations, ClassAccessor.class, BytecodeInstrumentation.getInternalMethod(ClassAccessor.class, "class_identifier").getName(), String.class, null);
 
 					if(classIdentifier != null) {
-						if(!fullClsNode) {
-							clsNode = new ClassNode();
-							classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
-							fullClsNode = true;
-						}
+						clsNode = new ClassNode();
+						classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
 						if(instrumentor.instrumentAccessorClass(clsNode, Bootstrapper.this)) {
 							modified = true;
 						}
 					}
 
-					if(className != null && instrumentor.acceptsClass(className)) {
-						if(!fullClsNode) {
+					final ClassNode acceptsClassNode = clsNode;
+					if(className != null && instrumentor.acceptsClass(clsNode, classIdentifier != null ? ClassReader.SKIP_FRAMES : ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG, flags -> {
+						if((classIdentifier != null && flags == ClassReader.SKIP_FRAMES || classIdentifier == null) && (flags == (ClassReader.SKIP_FRAMES | ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG))) {
+							return acceptsClassNode;
+						}
+						ClassNode newNode = new ClassNode();
+						classReader.accept(newNode, flags);
+						return newNode;
+					})) {
+						if(classIdentifier == null) {
 							clsNode = new ClassNode();
 							classReader.accept(clsNode, ClassReader.SKIP_FRAMES);
-							fullClsNode = true;
 						}
-						instrumentor.instrumentClass(loader, clsNode);
+						final ClassNode instrumentClassNode = clsNode;
+						instrumentor.instrumentClass(loader, clsNode, ClassReader.SKIP_FRAMES, flags -> {
+							if(flags == ClassReader.SKIP_FRAMES) {
+								return instrumentClassNode;
+							}
+							ClassNode newNode = new ClassNode();
+							classReader.accept(newNode, flags);
+							return newNode;
+						});
 						modified = true;
 					}
 
@@ -145,7 +156,7 @@ public class Bootstrapper {
 		}
 
 		for(ClassAccessorData accessor : this.accessors.getClassAccessors()) {
-			if(this.hierarchy.getClass(Bootstrapper.class.getClassLoader(), accessor.getAccessorClass().replace(".", "/"), false) != null) {
+			if(this.hierarchy.getClass(Bootstrapper.class.getClassLoader(), accessor.getAccessorClass().replace(".", "/"), false, null) != null) {
 				throw new InstrumentorException(String.format("Accessor class %s was already loaded before or during the bootstrapper initialization!", accessor.getAccessorClass()));
 			}
 		}
@@ -155,7 +166,7 @@ public class Bootstrapper {
 				@SuppressWarnings("unchecked")
 				Class<IAccessor> accessorCls = (Class<IAccessor>) Bootstrapper.class.getClassLoader().loadClass(accessor.getAccessorClass());
 
-				if(this.hierarchy.getClass(Bootstrapper.class.getClassLoader(), accessorCls.getName().replace(".", "/"), false) == null) {
+				if(this.hierarchy.getClass(Bootstrapper.class.getClassLoader(), accessorCls.getName().replace(".", "/"), false, null) == null) {
 					throw new InstrumentorException(String.format("Accessor class %s could not be loaded properly!", accessorCls.getName()));
 				}
 			} catch (ClassNotFoundException e) {

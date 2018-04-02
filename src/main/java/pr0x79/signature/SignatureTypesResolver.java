@@ -59,7 +59,7 @@ public class SignatureTypesResolver {
 		}
 
 		if(!variables.isEmpty()) {
-			ClassData ownerCls = this.hierarchy.getClass(this.loader, owner);
+			ClassData ownerCls = this.hierarchy.getClass(this.loader, owner, null);
 			if(ownerCls.signature != null) {
 				Signature ownerSig = SignatureParser.parse(ownerCls.signature);
 				resolve(ownerCls, variables, resolved, ownerSig);
@@ -75,7 +75,7 @@ public class SignatureTypesResolver {
 		}
 
 		if(!variables.isEmpty()) {
-			ClassData outerCls = this.hierarchy.getOuterClass(this.loader, cls.name);
+			ClassData outerCls = this.hierarchy.getOuterClass(this.loader, cls.name, null);
 			if(outerCls != null) {
 				if(outerCls.signature != null) {
 					Signature outerSig = SignatureParser.parse(outerCls.signature);
